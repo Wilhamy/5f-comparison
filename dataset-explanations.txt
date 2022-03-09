@@ -1,0 +1,19 @@
+All data comes from the Kaya dataset found here: https://figshare.com/collections/A_large_electroencephalographic_motor_imagery_dataset_for_electroencephalographic_brain_computer_interfaces/3917698?q=5F .
+
+These are 5F paradigms. The relevant marker states are as follows:
+1. Thumb
+2. Index finger
+3. Middle finger
+4. Ring finger
+5. Pinkie finger
+91. Session break
+92. Experiment end
+99. Initial relaxation
+
+The data were collected at two sampling frequencies.
+The datasets with HFREQ in the name were collected at 1000 Hz. All others were collected at 200 Hz.
+
+The subdirectories are as follows:
+	code: code for reading or processing the data
+	fta: datasets preprocessed into FTA features. These are 21 channels [0, 0.85] relative to onset.
+	raw: the original data as downloaded from the figshare collection. These are 22 channels (21 EEG, one synch).
