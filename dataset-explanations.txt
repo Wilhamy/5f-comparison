@@ -17,3 +17,5 @@ The subdirectories are as follows:
 	code: code for reading or processing the data
 	fta: datasets preprocessed into FTA features. These are 21 channels [0, 0.85] relative to onset.
 	raw: the original data as downloaded from the figshare collection. These are 22 channels (21 EEG, one synch).
+
+NOTE: THE DATA ARE NOT CENTERED!
