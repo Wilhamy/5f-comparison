@@ -32,14 +32,6 @@ for idx = 1:length(locs)
     win = onset_win_n + loc;
     
     ex = o.data(win(1):win(2)-1,rel_channels);
-%     ex_ft = fft(ex,[],1); % fourier transform per channel
-%     ex_ft = ex_ft(1:lpf_bound_i, :); % lowpass filtered
-%     
-%     ex_ft_r = real(ex_ft); % real part
-%     ex_ft_c = imag(ex_ft); % imaginary part
-%     
-%     ex_vec = cat(1, ex_ft_r, ex_ft_c(2:end,:));% feature vector
-%     ex_vec = ex_vec(:);
     
     examples(end+1, :, :) = ex;
     labels(end+1,:) = d(loc);
@@ -52,5 +44,6 @@ data.id = o.id;
 data.sampFreq = o.sampFreq;
 data.examples = examples_sort;
 data.labels = labels_sort;
+data.chames = rel_chnames;
 
 save(OUTDIR + "RAW_" + filename, 'data')
