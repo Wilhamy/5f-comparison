@@ -1,3 +1,4 @@
+from enum import unique
 import numpy as np
 
 
@@ -22,20 +23,27 @@ def spatial_filter(trials, Y):
 
     print("cov_trials.shape:", cov_trials.shape)
 
-    onehot_matrix = generate_onehot(Y, num_classes = 3)
-    print("onehot_matrix:", onehot_matrix)
+    # onehot_matrix = generate_onehot(Y, num_classes = 3)
+    # print("onehot_matrix:", onehot_matrix)
 
-    
+    Rs = np.zeros((5, Ceeg, Ceeg))
+    classes = set(Y)
+    for c in classes:
+        print("class:", c)
+        this_X = cov_trials[Y==c,:,:]
+        print("this_X shape", this_X.shape)
+        R1 = np.mean(this_X, axis=0)
+        print("r1 shape: ", R1.shape)
+        other_X = cov_trials[Y!=c,:,:]
+        print("other_X shape:", other_X.shape)
+        R2 = np.mean(other_X,axis=0)
+        print("r2 shape: ", R2.shape)
+        Rs[c] = R1+R2
+        print("Rs:\n",Rs)
 
 
-
-    pass
-
-
-
-
-trial = (np.arange(24)).reshape((2,3,4))
-Y = np.array([1, 2]) - 1
+trial = (np.arange(4*3*4)).reshape((4,3,4))
+Y = np.array([1, 2,2,3]) - 1
 # print("trial:", trial)
 
 spatial_filter(trial, Y)
