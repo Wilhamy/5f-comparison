@@ -4,7 +4,7 @@
 %       filename: name of .mat file
 % Outputs: Saves file in .mat located at OUTDIR\FTA_filename
 % Note: the examples are sorted by label.
-function [] = fta_process(DATADIR, OUTDIR, filename)
+function [] = raw_process(DATADIR, OUTDIR, filename)
 
 load(DATADIR + filename) % loads into o
 
@@ -32,25 +32,25 @@ for idx = 1:length(locs)
     win = onset_win_n + loc;
     
     ex = o.data(win(1):win(2)-1,rel_channels);
-    ex_ft = fft(ex,[],1); % fourier transform per channel
-    ex_ft = ex_ft(1:lpf_bound_i, :); % lowpass filtered
+%     ex_ft = fft(ex,[],1); % fourier transform per channel
+%     ex_ft = ex_ft(1:lpf_bound_i, :); % lowpass filtered
+%     
+%     ex_ft_r = real(ex_ft); % real part
+%     ex_ft_c = imag(ex_ft); % imaginary part
+%     
+%     ex_vec = cat(1, ex_ft_r, ex_ft_c(2:end,:));% feature vector
+%     ex_vec = ex_vec(:);
     
-    ex_ft_r = real(ex_ft); % real part
-    ex_ft_c = imag(ex_ft); % imaginary part
-    
-    ex_vec = cat(1, ex_ft_r, ex_ft_c(2:end,:));% feature vector
-    ex_vec = ex_vec(:);
-    
-    examples(end+1, :) = ex_vec;
+    examples(end+1, :, :) = ex;
     labels(end+1,:) = d(loc);
 end
 
 [labels_sort, sort_idx] = sort(labels);
-examples_sort = examples(sort_idx,:);
+examples_sort = examples(sort_idx,:,:);
 
 data.id = o.id;
 data.sampFreq = o.sampFreq;
 data.examples = examples_sort;
 data.labels = labels_sort;
 
-save(OUTDIR + "FTA_" + filename, 'data')
+save(OUTDIR + "RAW_" + filename, 'data')
