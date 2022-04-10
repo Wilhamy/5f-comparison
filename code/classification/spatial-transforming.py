@@ -44,7 +44,7 @@ class SpatialTransforming(nn.Module):
         # (batch_size, output_len, dimensions) * (batch_size, query_len, dimensions) ->
         # (batch_size, output_len, query_len)
         attention_scores = torch.bmm(query, X.transpose(1, 2).contiguous()) # TODO: Is X.tranpose correct? Is X the context?
-        attention_weights = self.softmax(attention_scores)
+        attention_weights = self.softmax(attention_scores) # TODO: should we divide by \sqrt(dk) as per the paper?
         attention_weights = attention_weights.view(batch_size, output_len, self.dimk) # TODO: is self.dimk correct here?
 
         mix = torch.bmm(attention_weights, X) # TODO: Is X correct here?
