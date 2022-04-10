@@ -79,6 +79,7 @@ class Attention(nn.Module):
         # (batch_size, output_len, query_len) * (batch_size, query_len, dimensions) ->
         # (batch_size, output_len, dimensions)
         mix = torch.bmm(attention_weights, context) # {The final dot product... but why no V?}
+        # {Attention weights by attention_scores?}
 
         # concat -> (batch_size * output_len, 2*dimensions)
         combined = torch.cat((mix, query), dim=2)
@@ -87,6 +88,6 @@ class Attention(nn.Module):
         # Apply linear_out on every 2nd dimension of concat
         # output -> (batch_size, output_len, dimensions)
         output = self.linear_out(combined).view(batch_size, output_len, dimensions)
-        output = self.tanh(output) #{?????????WHY}
+        output = self.tanh(output) #{Remove this layer unless we need clamping}
 
         return output, attention_weights
