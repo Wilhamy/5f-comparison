@@ -19,8 +19,6 @@ onset_win_s = [0, 0.85]; % seconds relative to onset
 onset_win_n = onset_win_s * o.sampFreq; % number of datapoints relative to onset
 
 win_len = diff(onset_win_n); % length of window, in samples
-lpf_bound_f = 5; % [Hz] upper bound of the lowerpass filter
-lpf_bound_i = ceil(5 / (o.sampFreq / win_len)) ; % [samples] the greatest index the lowpass filter includes (assuming n-point fourier transform where n is the win_len)
 
 rel_channels = [1:21]; %relevant channels, removes A1, A2, X3
 rel_chnames = o.chnames(rel_channels); % relevant channel names
