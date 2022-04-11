@@ -1,6 +1,4 @@
 import numpy as np
-import torch
-import torch.nn as nn
 import scipy.io
 import os
 # also need to import the transformer
