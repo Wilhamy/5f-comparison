@@ -1,18 +1,7 @@
 from enum import unique
 import numpy as np
 
-
-def generate_onehot(labels, num_classes):
-    '''generate_onehot(A, d) - turns vector A into a onehot matrix.
-    Inputs:
-        labels - the vector of shape (m,1)
-        num_classes - the number of entries per onehot vector
-    Outputs:
-        H - the onehot matrix
-    '''
-    assert num_classes > labels.max()
-    return (np.arange(num_classes) == labels[...,None]).astype(int)
-
+NUMCLASSES = 5
 #inputs:
 #   Trials: N x Ceeg x T
 #   Y Labels
@@ -24,12 +13,9 @@ def spatial_filter(trials, Y):
 
     print("cov_trials.shape:", cov_trials.shape)
 
-    # onehot_matrix = generate_onehot(Y, num_classes = 3)
-    # print("onehot_matrix:", onehot_matrix)
-
     # Rs = np.zeros((5, Ceeg, Ceeg))
     classes = sorted(set(Y))
-    W = np.zeros((5,4,Ceeg))
+    W = np.zeros((NUMCLASSES,5,Ceeg))
     for c in classes:
        
         this_X = cov_trials[Y==c,:,:]
@@ -56,20 +42,20 @@ def spatial_filter(trials, Y):
         # since filter is B^T P, sort it by decreasing order of magnitude of lambda_s_prime
         # take the first 4 values
         filter = B.T @ P 
-        filter = filter[s_idx][:4]
+        filter = filter[s_idx][:NUMCLASSES]
         # add the filter fo
         W[c] = filter
-    W = W.reshape((5*4, Ceeg))
-    print(f"W shape: {W.shape}")
+    W = W.reshape((NUMCLASSES*NUMCLASSES, Ceeg))
+    return W
         
 
          
 
 
-trial = np.random.rand(10,21,170)
-Y = np.array([1, 2,2,3, 4, 5,1,3,2,4]) - 1
-# print("trial:", trial)
+# trial = np.random.rand(10,21,170)
+# Y = np.array([1, 2,2,3, 4, 5,1,3,2,4]) - 1
+# # print("trial:", trial)
 
-spatial_filter(trial, Y)
+# spatial_filter(trial, Y)
 
 
