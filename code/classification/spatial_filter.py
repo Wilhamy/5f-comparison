@@ -73,4 +73,3 @@ Y = np.array([1, 2,2,3, 4, 5,1,3,2,4]) - 1
 spatial_filter(trial, Y)
 
 
-
