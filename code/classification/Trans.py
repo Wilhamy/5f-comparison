@@ -250,35 +250,35 @@ class channel_attention(nn.Module):
 
 
 class Trans():
-    def __init__(self, nsub):
+    def __init__(self, filename:str, batch_size=50,n_epochs=2000,img_height=21,img_width=850,c_dim=4,lr=0.0002,b1=0.5,b2=0.9):
         super(Trans, self).__init__()
-        self.batch_size = 50
-        self.n_epochs = 2000
-        self.img_height = 22
-        self.img_width = 600
-        self.channels = 1
-        self.c_dim = 4
-        self.lr = 0.0002
-        self.b1 = 0.5
-        self.b2 = 0.9
-        self.nSub = nsub
-        self.start_epoch = 0
+        assert filename != '' # cannot be empty
+        self.batch_size = batch_size # size of batch
+        self.n_epochs = n_epochs # number of epochs
+        self.img_height = img_height # number of channels
+        self.img_width = img_width # time series size?
+        # self.channels = channels # TODO: remove me?
+        self.c_dim = c_dim   # convolution dimension?
+        self.lr = lr # learning rate
+        self.b1 = b1 # optimization parameter
+        self.b2 = b2 # optimization parameter
+        # self.start_epoch = start_epoch
         self.root = '...'  # the path of data
 
         self.pretrain = False
 
-        self.log_write = open("../../output/log_subject%d.txt" % self.nSub, "w")
+        self.log_write = open("../../output/log_subject%d.txt" % self.nSub, "w") # TODO: CHANGE ME
 
-        self.img_shape = (self.channels, self.img_height, self.img_width)  # something no use
+        self.img_shape = (self.img_height, self.img_width) # input image size
 
         self.Tensor = torch.cuda.FloatTensor
         self.LongTensor = torch.cuda.LongTensor
 
-        self.criterion_l1 = torch.nn.L1Loss().cuda()
-        self.criterion_l2 = torch.nn.MSELoss().cuda()
-        self.criterion_cls = torch.nn.CrossEntropyLoss().cuda()
+        self.criterion_l1 = torch.nn.L1Loss().to(device)
+        self.criterion_l2 = torch.nn.MSELoss().to(device)
+        self.criterion_cls = torch.nn.CrossEntropyLoss().to(device)
 
-        self.model = ViT().cuda()
+        self.model = ViT().to(device)
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         summary(self.model, (1, 16, 1000))
@@ -325,7 +325,7 @@ class Trans():
         self.allData = all_data[:641]
         self.allLabel = all_label[:641]
         self.testData = all_data[641:] ##### Group10 note: the number 641 here is chosen based on test, train split ####
-        self.testLabel = all_label[641:]
+        self.testLabel = all_label[641:] ##TODO: make it a floor function
 
         ### TODO: GROUP10
         #  PROBABLY BETTER NOT TO USE ANY OF THE CODE ABOVE SINCE WE ALREADY CREATED 
@@ -392,8 +392,8 @@ class Trans():
             self.model.train()
             for i, (img, label) in enumerate(self.dataloader):
 
-                img = Variable(img.cuda().type(self.Tensor))
-                label = Variable(label.cuda().type(self.LongTensor))
+                img = Variable(img.to(device).type(self.Tensor))
+                label = Variable(label.to(device).type(self.LongTensor))
                 tok, outputs = self.model(img)
                 loss = self.criterion_cls(outputs, label)
                 self.optimizer.zero_grad()
@@ -439,7 +439,7 @@ def main():
     aver = 0
     result_write = open("../../output/sub_result.txt", "w")
 
-    for i in range(9):
+    for i in range(9): # TODO: change for loop? are they iterating over files?
         seed_n = np.random.randint(500)
         print('seed is ' + str(seed_n))
         random.seed(seed_n)
