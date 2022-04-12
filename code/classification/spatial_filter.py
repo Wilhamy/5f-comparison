@@ -1,7 +1,8 @@
 from enum import unique
 import numpy as np
 
-NUMCLASSES = 5
+NUMCLASSES = 5 # numnber of classes
+num_pc = 4 # number of principle components to use
 #inputs:
 #   Trials: N x Ceeg x T
 #   Y Labels
@@ -14,8 +15,9 @@ def spatial_filter(trials, Y):
     print("cov_trials.shape:", cov_trials.shape)
 
     # Rs = np.zeros((5, Ceeg, Ceeg))
+    Y = Y-1
     classes = sorted(set(Y))
-    W = np.zeros((NUMCLASSES,5,Ceeg))
+    W = np.zeros((NUMCLASSES,num_pc,Ceeg))
     for c in classes:
        
         this_X = cov_trials[Y==c,:,:]
@@ -42,10 +44,10 @@ def spatial_filter(trials, Y):
         # since filter is B^T P, sort it by decreasing order of magnitude of lambda_s_prime
         # take the first 4 values
         filter = B.T @ P 
-        filter = filter[s_idx][:NUMCLASSES]
+        filter = filter[s_idx][:num_pc]
         # add the filter fo
         W[c] = filter
-    W = W.reshape((NUMCLASSES*NUMCLASSES, Ceeg))
+    W = W.reshape((NUMCLASSES*num_pc, Ceeg))
     return W
         
 

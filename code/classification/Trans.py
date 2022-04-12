@@ -178,7 +178,7 @@ class ViT(nn.Sequential):
             # channel_attention(),
             ResidualAdd(
                 nn.Sequential(
-                    nn.LayerNorm(1000),
+                    nn.LayerNorm(3400),
                     channel_attention(),
                     nn.Dropout(0.5),
                 )
@@ -289,7 +289,7 @@ class Trans():
 
         self.pretrain = False
 
-        self.log_write = open(os.path.join(self.outdir,f"log_{filename[:-4]}.txt"), "w") # TODO: CHANGE ME
+        # self.log_write = open(os.path.join(self.outdir,f"log_{filename[:-4]}.txt"), "w") # TODO: CHANGE ME
 
         # self.img_shape = (self.img_height, self.img_width) # input image size
 
@@ -315,12 +315,12 @@ class Trans():
         # to get the data of target subject
         self.total_data = np.load(os.path.join(self.path,self.filename), allow_pickle=True)
         self.train_data = self.total_data.item()['x_train'].transpose(0,2,1) # GROUP10; transposed to form n x Ceeg x T
-        self.train_label = self.total_data.item()['y_train'] # GROUP10
+        self.train_labels = self.total_data.item()['y_train'] # GROUP10
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
-        self.test_label = self.total_data.item()['y_test'] #GROUP10
+        self.test_labels = self.total_data.item()['y_test'] #GROUP10
 
         _, self.img_height, self.image_width = self.train_data.shape # might not be necessary
-        return self.train_data, self.train_label, self.test_data, self.test_label
+        return self.train_data, self.train_labels, self.test_data, self.test_labels
         # below is a lot of stuff we don't need.
         # print(self.train_data.shape, self.train_label.shape)
         # print(self.test_data.shape, self.test_label.shape)
@@ -416,7 +416,7 @@ class Trans():
         print("Initiate cross-validation.")
         #self.get_source_data()
         ## formatting for splits found at https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html
-        kf = model_selection.KFold(n_splits=num_folds, random_state=42) # TODO: randomize random state?
+        kf = model_selection.KFold(n_splits=num_folds, random_state=42, shuffle=True) # TODO: randomize random state?
         kf.get_n_splits(self.train_data)
         fold_num = 0 # number for this current fold
         running_total_acc = 0 # used in calculating average accuracy
@@ -426,7 +426,7 @@ class Trans():
         Y_preds = []
         for train_idxs, val_idxs in kf.split(self.train_data):
             print("Fold number %d", fold_num)
-            self.log.write(f"Fold number {fold_num}")
+            # self.log.write(f"Fold number {fold_num}")
             # Generate train and validation splits #
             X_t = self.train_data[train_idxs]   # train split
             y_t = self.train_labels[train_idxs] # train labels
@@ -436,12 +436,18 @@ class Trans():
             mu, sigma, W = self.preprocessing(X_t, y_t)
             X_t = W @ ((X_t - mu) / sigma)
             X_v = W @ ((X_v - mu) / sigma) # TODO: consider einsum?
+            print(f"X_t shape:{X_t.shape}")
+            print(f"X_v shape:{X_v.shape}")
+            _, tcounts = np.unique(y_t, return_counts=True)
+            _, vcounts = np.unique(y_v, return_counts=True)
+            print(f"y_t counts:{tcounts}")
+            print(f"y_v counts:{vcounts}")
             
             # train model on training set and predict accuracy on validation set #
             bestAcc, averAcc, Y_true, Y_pred = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
             # pred, acc = self.classify(X_v, y_v) # TODO: write this method # Is this necessary if testing on validation set can be done in self.train?
-            bestAccs.append(bestAccs) # best accuracy in the train method
-            averAccs.append(averAccs) # average accuracy from the train method
+            bestAccs.append(bestAcc) # best accuracy in the train method
+            averAccs.append(averAcc) # average accuracy from the train method
             Y_trues.append(Y_true)
             Y_preds.append(Y_pred)
             # update accuracy statistics #
@@ -509,6 +515,8 @@ class Trans():
             for i, (img, label) in enumerate(self.dataloader):
 
                 img = Variable(img.to(device).type(self.Tensor))
+                img = img.reshape((img.shape[0], img.shape[1]*img.shape[2]))
+                print(f"img shape; {img.shape}")
                 label = Variable(label.to(device).type(self.LongTensor))
                 tok, outputs = self.model(img)
                 loss = self.criterion_cls(outputs, label)
@@ -518,7 +526,7 @@ class Trans():
 
             out_epoch = time.time()
 
-            if (e + 1) % 1 == 0:
+            if (e + 1) % 1 == 0: # TODO: report step size
                 self.model.eval()
                 Tok, Cls = self.model(test_data)
 
@@ -532,7 +540,7 @@ class Trans():
                       '  Validation loss:', loss_test.detach().cpu().numpy(),
                       '  Train accuracy:', train_acc,
                       '  Validation accuracy is:', acc)
-                self.log_write.write(str(e) + "    " + str(acc) + "\n")
+                # self.log_write.write(str(e) + "    " + str(acc) + "\n")
                 num = num + 1
                 averAcc = averAcc + acc
                 if acc > bestAcc:
@@ -544,8 +552,8 @@ class Trans():
         averAcc = averAcc / num
         print('The average epoch accuracy is:', averAcc)
         print('The best epoch accuracy is:', bestAcc)
-        self.log_write.write('The average epoch accuracy is: ' + str(averAcc) + "\n")
-        self.log_write.write('The best epoch accuracy is: ' + str(bestAcc) + "\n")
+        # self.log_write.write('The average epoch accuracy is: ' + str(averAcc) + "\n")
+        # self.log_write.write('The best epoch accuracy is: ' + str(bestAcc) + "\n")
 
         return bestAcc, averAcc, Y_true, Y_pred # TODO: edit what is being returned
 
@@ -570,11 +578,16 @@ def main():
     torch.cuda.manual_seed_all(seed_n)
     print(f'File {FILENAME}')
     trans = Trans(DATADIR, FILENAME, outdir=OUTDIR)
-    bestAcc, averAcc, Y_true, Y_pred = trans.train()
+
+    # get the data and start the training process
+    trans.get_source_data()
+    bestAcc, averAcc, Y_true, Y_pred = trans.crossVal(2)
+
     print('THE BEST ACCURACY IS ' + str(bestAcc))
+    print(f"Averac: {averAcc}")
     result_write.write('File ' + FILENAME + ' : ' + 'Seed is: ' + str(seed_n) + "\n")
-    result_write.write('**File ' + FILENAME + ' : ' + 'The best accuracy is: ' + str(bestAcc) + "\n")
-    result_write.write('File ' + FILENAME + ' : ' + 'The average accuracy is: ' + str(averAcc) + "\n")
+    # result_write.write('**File ' + FILENAME + ' : ' + 'The best accuracy is: ' + str(bestAcc) + "\n")
+    # result_write.write('File ' + FILENAME + ' : ' + 'The average accuracy is: ' + str(averAcc) + "\n")
     # plot_confusion_matrix(Y_true, Y_pred, i+1)
     best = best + bestAcc
     aver = aver + averAcc
