@@ -12,7 +12,7 @@ import scipy.io
 
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from torchsummary import summary
+# from torchsummary import summary
 
 import torch
 
@@ -54,7 +54,7 @@ class PatchEmbedding(nn.Module):
         # self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Conv2d(1, 2, (1, 51), (1, 1)),
+            nn.Conv2d(1, 2, (1, 51), (1, 1)), # GROUP10: why these values?
             nn.BatchNorm2d(2),
             nn.LeakyReLU(0.2),
             nn.Conv2d(2, emb_size, (16, 5), stride=(1, 5)),
@@ -250,9 +250,12 @@ class channel_attention(nn.Module):
 
 
 class Trans():
-    def __init__(self, filename:str, batch_size=50,n_epochs=2000,img_height=21,img_width=850,c_dim=4,lr=0.0002,b1=0.5,b2=0.9):
+    def __init__(self, path:str, filename:str, outdir:str, batch_size=50,n_epochs=2000,img_height=21,img_width=850,c_dim=4,lr=0.0002,b1=0.5,b2=0.9):
         super(Trans, self).__init__()
         assert filename != '' # cannot be empty
+        self.path = path # path to datafile
+        self.filename = filename # include whole path to file here as well
+        self.outdir = outdir #output directory
         self.batch_size = batch_size # size of batch
         self.n_epochs = n_epochs # number of epochs
         self.img_height = img_height # number of channels
@@ -263,11 +266,11 @@ class Trans():
         self.b1 = b1 # optimization parameter
         self.b2 = b2 # optimization parameter
         # self.start_epoch = start_epoch
-        self.root = '...'  # the path of data
+        self.root = '...'  # the path of data # change this?
 
         self.pretrain = False
 
-        self.log_write = open("../../output/log_subject%d.txt" % self.nSub, "w") # TODO: CHANGE ME
+        self.log_write = open(os.path.join(self.outdir,f"log_{filename[:-4]}.txt"), "w") # TODO: CHANGE ME
 
         self.img_shape = (self.img_height, self.img_width) # input image size
 
@@ -281,67 +284,81 @@ class Trans():
         self.model = ViT().to(device)
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
-        summary(self.model, (1, 16, 1000))
+        # summary(self.model, (1, 16, 1000))
+        print("HERE BE SUMMARY")
 
         self.centers = {}
 
+    # returns NONE
     def get_source_data(self):
 
         # to get the data of target subject
-        self.total_data = np.load("../../output/saved_data.npy", allow_pickle=True)
-        self.train_data = self.total_data.item()['x_train']
-        self.train_label = self.total_data.item()['y_train']
+        self.total_data = np.load(os.path.join(self.path,self.filename), allow_pickle=True)
+        self.train_data = self.total_data.item()['x_train'].transpose(0,2,1) # GROUP10; transposed to form n x Ceeg x T
+        self.train_label = self.total_data.item()['y_train'] # GROUP10
+        self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
+        self.test_label = self.total_data.item()['y_test'] #GROUP10
+        return self.train_data, self.train_label, self.test_data, self.test_label
+        # below is a lot of stuff we don't need.
+        # print(self.train_data.shape, self.train_label.shape)
+        # print(self.test_data.shape, self.test_label.shape)
+        # GROUP10
+        ## z-score standardization
+        # self.train_data = 
+        # END GROUP10
+        
+        # START NOT US
+        # self.train_data = np.transpose(self.train_data, (2, 1, 0)) #OG
+        # self.train_data = np.expand_dims(self.train_data, axis=1) #OG
+        # self.train_label = np.transpose(self.train_label) #OG
 
-        self.train_data = np.transpose(self.train_data, (2, 1, 0))
-        self.train_data = np.expand_dims(self.train_data, axis=1)
-        self.train_label = np.transpose(self.train_label)
-
-        self.allData = self.train_data
-        self.allLabel = self.train_label[0]
+        # self.allData = self.train_data #OG
+        # self.allLabel = self.train_label[0] #OG
 
         # test data
         # to get the data of target subject
         # self.test_tmp = scipy.io.loadmat(self.root + 'A0%dE.mat' % self.nSub)
-        self.test_data = self.total_data.item()['x_test']
-        self.test_label = self.total_data.item()['y_test']
+        # self.test_data = self.total_data.item()['x_test']
+        # self.test_label = self.total_data.item()['y_test']
 
         # self.train_data = self.train_data[250:1000, :, :]
-        self.test_data = np.transpose(self.test_data, (2, 1, 0))
-        self.test_data = np.expand_dims(self.test_data, axis=1)
-        self.test_label = np.transpose(self.test_label)
+        # self.test_data = np.transpose(self.test_data, (2, 1, 0))
+        # self.test_data = np.expand_dims(self.test_data, axis=1)
+        # self.test_label = np.transpose(self.test_label)
 
-        self.testData = self.test_data
-        self.testLabel = self.test_label
+        # self.testData = self.test_data
+        # self.testLabel = self.test_label
 
         # Mix the train and test data - a quick way to get start
         # But I agree, just shuffle data is a bad measure
         # You could choose cross validation, or get more data from more subjects, then Leave one subject out
-        all_data = np.concatenate((self.allData, self.testData), 0)
-        all_label = np.concatenate((self.allLabel, self.testLabel), 0)
-        all_shuff_num = np.random.permutation(len(all_data))
-        all_data = all_data[all_shuff_num]
-        all_label = all_label[all_shuff_num]
+        # all_data = np.concatenate((self.allData, self.testData), 0) # what is this concat???
+        # all_label = np.concatenate((self.allLabel, self.testLabel), 0)
+        # all_shuff_num = np.random.permutation(len(all_data))
+        # all_data = all_data[all_shuff_num]
+        # all_label = all_label[all_shuff_num]
+        # END NOT US
 
-        self.allData = all_data[:641]
-        self.allLabel = all_label[:641]
-        self.testData = all_data[641:] ##### Group10 note: the number 641 here is chosen based on test, train split ####
-        self.testLabel = all_label[641:] ##TODO: make it a floor function
+        # self.allData = all_data[:641]
+        # self.allLabel = all_label[:641]
+        # self.testData = all_data[641:] ##### Group10 note: the number 641 here is chosen based on test, train split ####
+        # self.testLabel = all_label[641:] ##TODO: make it a floor function
 
         ### TODO: GROUP10
         #  PROBABLY BETTER NOT TO USE ANY OF THE CODE ABOVE SINCE WE ALREADY CREATED 
         # TRAIN TEST SPLIT. THE ONLY PART WORTH KEEPING MIGHT BE THE CONCATANATING ALL THE DATA###
 
-        # standardize
-        target_mean = np.mean(self.allData)
-        target_std = np.std(self.allData)
-        self.allData = (self.allData - target_mean) / target_std
-        self.testData = (self.testData - target_mean) / target_std
+        # standardize # DON"T STANDARDIZE HERE. STANDARDIZE IN training
+        # target_mean = np.mean(self.allData)
+        # target_std = np.std(self.allData)
+        # self.allData = (self.allData - target_mean) / target_std
+        # self.testData = (self.testData - target_mean) / target_std
 
-        tmp_alldata = np.transpose(np.squeeze(self.allData), (0, 2, 1))
-        Wb = spatial_filter(tmp_alldata, self.allLabel-1)  # common spatial pattern
-        self.allData = np.einsum('abcd, ce -> abed', self.allData, Wb)
-        self.testData = np.einsum('abcd, ce -> abed', self.testData, Wb)
-        return self.allData, self.allLabel, self.testData, self.testLabel
+        # tmp_alldata = np.transpose(np.squeeze(self.allData), (0, 2, 1))
+        # Wb = spatial_filter(tmp_alldata, self.allLabel-1)  # common spatial pattern
+        # self.allData = np.einsum('abcd, ce -> abed', self.allData, Wb)
+        # self.testData = np.einsum('abcd, ce -> abed', self.testData, Wb)
+        # return self.allData, self.allLabel, self.testData, self.testLabel
 
     def update_lr(self, optimizer, lr):
         for param_group in optimizer.param_groups:
@@ -352,6 +369,22 @@ class Trans():
         aug_data = []
         aug_label = []
         return aug_data, aug_label
+
+    # preprocessing for each validation split
+    # Input: X - the (training) data
+    #        y - the labels
+    # Returns:
+    #   X_out - the standardized training data
+    #   mu - the average over the training 
+    #   sigma - the standard deviation over the training
+    #   W (tuple) - the spatial filter weights
+    def preprocessing(self, X, y):
+        assert X.shape[0] == y.shape[0] # same number of examples
+        mu = np.average(X)
+        sigma = np.std(X)
+        W = spatial_filter(X, y)
+        X_out = (X - mu) / sigma
+        return X_out, mu, sigma, W
 
     def train(self):
 
@@ -437,33 +470,39 @@ class Trans():
 def main():
     best = 0
     aver = 0
-    result_write = open("../../output/sub_result.txt", "w")
+    result_write = open(r"D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output\sub_result.txt", "w") # TODO: EDIT PATH
 
-    for i in range(9): # TODO: change for loop? are they iterating over files?
-        seed_n = np.random.randint(500)
-        print('seed is ' + str(seed_n))
-        random.seed(seed_n)
-        np.random.seed(seed_n)
-        torch.manual_seed(seed_n)
-        torch.cuda.manual_seed(seed_n)
-        torch.cuda.manual_seed_all(seed_n)
-        print('Subject %d' % (i+1))
-        trans = Trans(i + 1)
-        bestAcc, averAcc, Y_true, Y_pred = trans.train()
-        print('THE BEST ACCURACY IS ' + str(bestAcc))
-        result_write.write('Subject ' + str(i + 1) + ' : ' + 'Seed is: ' + str(seed_n) + "\n")
-        result_write.write('**Subject ' + str(i + 1) + ' : ' + 'The best accuracy is: ' + str(bestAcc) + "\n")
-        result_write.write('Subject ' + str(i + 1) + ' : ' + 'The average accuracy is: ' + str(averAcc) + "\n")
-        # plot_confusion_matrix(Y_true, Y_pred, i+1)
-        best = best + bestAcc
-        aver = aver + averAcc
-        if i == 0:
-            yt = Y_true
-            yp = Y_pred
-        else:
-            yt = torch.cat((yt, Y_true))
-            yp = torch.cat((yp, Y_pred))
-
+    #PATH = ''
+    DATADIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output'
+    OUTDIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output'
+    FILENAME = r'saved_data.npy'
+    # for i in range(9): # TODO: change for loop? are they iterating over files?
+    # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
+    seed_n = np.random.randint(500)
+    print('seed is ' + str(seed_n))
+    random.seed(seed_n)
+    np.random.seed(seed_n)
+    torch.manual_seed(seed_n)
+    torch.cuda.manual_seed(seed_n)
+    torch.cuda.manual_seed_all(seed_n)
+    print(f'File {FILENAME}')
+    trans = Trans(DATADIR, FILENAME, outdir=OUTDIR)
+    bestAcc, averAcc, Y_true, Y_pred = trans.train()
+    print('THE BEST ACCURACY IS ' + str(bestAcc))
+    result_write.write('File ' + FILENAME + ' : ' + 'Seed is: ' + str(seed_n) + "\n")
+    result_write.write('**File ' + FILENAME + ' : ' + 'The best accuracy is: ' + str(bestAcc) + "\n")
+    result_write.write('File ' + FILENAME + ' : ' + 'The average accuracy is: ' + str(averAcc) + "\n")
+    # plot_confusion_matrix(Y_true, Y_pred, i+1)
+    best = best + bestAcc
+    aver = aver + averAcc
+    # if i == 0:
+    #     yt = Y_true
+    #     yp = Y_pred
+    # else:
+    #     yt = torch.cat((yt, Y_true)) # GROUP10: why cat?
+    #     yp = torch.cat((yp, Y_pred))
+    yt = Y_true
+    yp = Y_pred
 
     best = best / 9
     aver = aver / 9
