@@ -1,8 +1,12 @@
+'''generateData.py - apply bandpass filter to data.
+Converts from .mat to .npy.
+'''
 import numpy as np
 import scipy.io
 import scipy.signal
 from sklearn.model_selection import train_test_split
 import os
+
 
 from torch import save
 # also need to import the transformer
