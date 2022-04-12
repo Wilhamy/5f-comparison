@@ -409,8 +409,8 @@ class Trans():
     '''crossVal - perform k-fold crossvalidation
     Input: num_folds (int) - the number of folds for cross validation
     Outputs:
-        avg_acc - the average k-fold crossvalidation accuracy
-        best_acc - the best accuracy on a fold
+        avg_accs - the average k-fold crossvalidation accuracies
+        best_accs - the best accuracy on each fold
     '''
     def crossVal(self, num_folds:int): # NOTE: must run getSourceData before this method! Assume that it has been called?
         print("Initiate cross-validation.")
@@ -420,7 +420,10 @@ class Trans():
         kf.get_n_splits(self.train_data)
         fold_num = 0 # number for this current fold
         running_total_acc = 0 # used in calculating average accuracy
-        best_acc = -1   # used in reporting best accuracy
+        bestAccs = []
+        averAccs = []
+        Y_trues = []
+        Y_preds = []
         for train_idxs, val_idxs in kf.split(self.train_data):
             print("Fold number %d", fold_num)
             self.log.write(f"Fold number {fold_num}")
@@ -435,17 +438,20 @@ class Trans():
             X_v = W @ ((X_v - mu) / sigma) # TODO: consider einsum?
             
             # train model on training set and predict accuracy on validation set #
-            self.train(X_t, y_t) # TODO: edit train method to no longer use the self.parameters
-            pred, acc = self.classify(X_v, y_v) # TODO: write this method
-
+            bestAcc, averAcc, Y_true, Y_pred = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
+            # pred, acc = self.classify(X_v, y_v) # TODO: write this method # Is this necessary if testing on validation set can be done in self.train?
+            bestAccs.append(bestAccs) # best accuracy in the train method
+            averAccs.append(averAccs) # average accuracy from the train method
+            Y_trues.append(Y_true)
+            Y_preds.append(Y_pred)
             # update accuracy statistics #
-            running_total_acc += acc
-            if best_acc < acc: best_acc = acc
-            print(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
-            self.log.write(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
+            # running_total_acc += acc
+            # if best_acc < acc: best_acc = acc
+            # print(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
+            # self.log.write(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
             fold_num += 1
-        avg_acc = running_total_acc / num_folds
-        return avg_acc, best_acc
+        # avg_acc = running_total_acc / num_folds
+        return averAccs, bestAccs
         # Proc: save statistics and calculate the avg. performance (what objective function should we use for validation?)
         # split HERE # split training into [train, validation]
         # for fold in numfolds: # iterate over all train-validation splits
