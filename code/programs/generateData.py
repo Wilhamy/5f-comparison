@@ -19,6 +19,7 @@ examples = data_obj[2]
 labels = data_obj[3].flatten()
 # chnames = data_obj[4]
 N,T,Ceeg = examples.shape # number of examples, number of time steps per ex, number of channels
+
 # examples = examples.transpose(0,2,1) # transpose is being done in trans.py already
 
 ## Pre-processing

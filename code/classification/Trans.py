@@ -15,6 +15,7 @@ from torch.autograd import Variable
 from torchsummary import summary
 
 import torch
+
 import torch.nn.functional as F
 
 from torch import nn
@@ -37,9 +38,15 @@ cudnn.deterministic = True
 # writer = SummaryWriter('/home/syh/Documents/MI/code/Trans/TensorBoardX/')
 
 # torch.cuda.set_device(6)
-gpus = [6]
-os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, gpus))
+# gpus = [6]
+# os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+# os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, gpus))
+torch.cuda.is_available()
+if torch.cuda.is_available():  
+  dev = "cuda:0" 
+else:  
+  dev = "cpu"  
+device = torch.device(dev)  
 
 
 class PatchEmbedding(nn.Module):
@@ -260,7 +267,7 @@ class Trans():
 
         self.pretrain = False
 
-        self.log_write = open("results/log_subject%d.txt" % self.nSub, "w")
+        self.log_write = open("../../output/log_subject%d.txt" % self.nSub, "w")
 
         self.img_shape = (self.channels, self.img_height, self.img_width)  # something no use
 
@@ -272,8 +279,8 @@ class Trans():
         self.criterion_cls = torch.nn.CrossEntropyLoss().cuda()
 
         self.model = ViT().cuda()
-        self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
-        self.model = self.model.cuda()
+        # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
+        self.model = self.model.to(device)
         summary(self.model, (1, 16, 1000))
 
         self.centers = {}
@@ -281,9 +288,9 @@ class Trans():
     def get_source_data(self):
 
         # to get the data of target subject
-        self.total_data = scipy.io.loadmat(self.root + 'A0%dT.mat' % self.nSub)
-        self.train_data = self.total_data['data']
-        self.train_label = self.total_data['label']
+        self.total_data = np.load("../../output/saved_data.npy", allow_pickle=True)
+        self.train_data = self.total_data.item()['x_train']
+        self.train_label = self.total_data.item()['y_train']
 
         self.train_data = np.transpose(self.train_data, (2, 1, 0))
         self.train_data = np.expand_dims(self.train_data, axis=1)
@@ -294,9 +301,9 @@ class Trans():
 
         # test data
         # to get the data of target subject
-        self.test_tmp = scipy.io.loadmat(self.root + 'A0%dE.mat' % self.nSub)
-        self.test_data = self.test_tmp['data']
-        self.test_label = self.test_tmp['label']
+        # self.test_tmp = scipy.io.loadmat(self.root + 'A0%dE.mat' % self.nSub)
+        self.test_data = self.total_data.item()['x_test']
+        self.test_label = self.total_data.item()['y_test']
 
         # self.train_data = self.train_data[250:1000, :, :]
         self.test_data = np.transpose(self.test_data, (2, 1, 0))
@@ -304,7 +311,7 @@ class Trans():
         self.test_label = np.transpose(self.test_label)
 
         self.testData = self.test_data
-        self.testLabel = self.test_label[0]
+        self.testLabel = self.test_label
 
         # Mix the train and test data - a quick way to get start
         # But I agree, just shuffle data is a bad measure
@@ -315,10 +322,14 @@ class Trans():
         all_data = all_data[all_shuff_num]
         all_label = all_label[all_shuff_num]
 
-        self.allData = all_data[:516]
-        self.allLabel = all_label[:516]
-        self.testData = all_data[516:]
-        self.testLabel = all_label[516:]
+        self.allData = all_data[:641]
+        self.allLabel = all_label[:641]
+        self.testData = all_data[641:] ##### Group10 note: the number 641 here is chosen based on test, train split ####
+        self.testLabel = all_label[641:]
+
+        ### TODO: GROUP10
+        #  PROBABLY BETTER NOT TO USE ANY OF THE CODE ABOVE SINCE WE ALREADY CREATED 
+        # TRAIN TEST SPLIT. THE ONLY PART WORTH KEEPING MIGHT BE THE CONCATANATING ALL THE DATA###
 
         # standardize
         target_mean = np.mean(self.allData)
@@ -426,7 +437,7 @@ class Trans():
 def main():
     best = 0
     aver = 0
-    result_write = open("results/sub_result.txt", "w")
+    result_write = open("../../output/sub_result.txt", "w")
 
     for i in range(9):
         seed_n = np.random.randint(500)
