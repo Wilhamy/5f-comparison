@@ -11,8 +11,8 @@ import os
 from torch import save
 # also need to import the transformer
 
-DATADIR = r'..\..\raw'# Path to the data
-OUTDIR = r'..\..\output'
+DATADIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\raw'# Path to the data
+OUTDIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output'
 
 
 ## TODO: START FOR HERE
@@ -49,4 +49,9 @@ save_data["x_test"] = x_test
 save_data["y_train"] = y_train
 save_data["y_test"] = y_test
 
-np.save("..\..\output\saved_data.npy", save_data)
+_, traincounts = np.unique(y_train, return_counts=True)
+_, testcounts = np.unique(y_test, return_counts=True)
+print('train:', traincounts)
+print('test:', testcounts)
+
+# np.save("..\..\output\saved_data.npy", save_data)
