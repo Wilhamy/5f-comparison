@@ -9,6 +9,7 @@ import math
 import random
 import time
 import scipy.io
+from sklearn import preprocessing
 
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -54,7 +55,7 @@ class PatchEmbedding(nn.Module):
         # self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Conv2d(1, 2, (1, 51), (1, 1)), # GROUP10: why these values?
+            nn.Conv2d(1, 2, (1, 51), (1, 1)), # GROUP10: why these values? TODO: ANSWER: 51 is a hyperparameter that needs tuning! (kc)
             nn.BatchNorm2d(2),
             nn.LeakyReLU(0.2),
             nn.Conv2d(2, emb_size, (16, 5), stride=(1, 5)),
@@ -160,7 +161,7 @@ class ClassificationHead(nn.Sequential):
     def __init__(self, emb_size, n_classes):
         super().__init__()
         self.clshead = nn.Sequential(
-            Reduce('b n e -> b e', reduction='mean'),
+            Reduce('b n e -> b e', reduction='mean'), # the mysterious compression
             nn.LayerNorm(emb_size),
             nn.Linear(emb_size, n_classes)
         )
@@ -183,7 +184,7 @@ class ViT(nn.Sequential):
             ),
 
             PatchEmbedding(emb_size),
-            TransformerEncoder(depth, emb_size),
+            TransformerEncoder(depth, emb_size), # TODO: GROUP10: include heads (hyperparameter)?
             ClassificationHead(emb_size, n_classes)
         )
 
@@ -250,7 +251,17 @@ class channel_attention(nn.Module):
 
 
 class Trans():
-    def __init__(self, path:str, filename:str, outdir:str, batch_size=50,n_epochs=2000,img_height=21,img_width=850,c_dim=4,lr=0.0002,b1=0.5,b2=0.9):
+    def __init__(self, path:str, filename:str, outdir:str, slice_size=10, h=5, batch_size=50,n_epochs=2000,c_dim=4,lr=0.0002,b1=0.5,b2=0.9):
+        '''__init__ - initialization for the Trans class
+        Necessary Inputs:
+            path (str) - path to the data
+            filename (str) - name for the datafile
+            outdir (str) - path to output directory
+        Hyperparameters:
+            slice_size - number of slices for attention mechanism
+            h - number of heads
+            c_dim - size of convolution # TODO: is this working???
+        '''
         super(Trans, self).__init__()
         assert filename != '' # cannot be empty
         self.path = path # path to datafile
@@ -258,8 +269,10 @@ class Trans():
         self.outdir = outdir #output directory
         self.batch_size = batch_size # size of batch
         self.n_epochs = n_epochs # number of epochs
-        self.img_height = img_height # number of channels
-        self.img_width = img_width # time series size?
+        self.heads = h # number of heads
+        self.slice_size = slice_size # number of slices for attention
+        # self.img_height = img_height # number of channels # removed
+        # self.img_width = img_width # time series size? # removed
         # self.channels = channels # TODO: remove me?
         self.c_dim = c_dim   # convolution dimension?
         self.lr = lr # learning rate
@@ -272,7 +285,7 @@ class Trans():
 
         self.log_write = open(os.path.join(self.outdir,f"log_{filename[:-4]}.txt"), "w") # TODO: CHANGE ME
 
-        self.img_shape = (self.img_height, self.img_width) # input image size
+        # self.img_shape = (self.img_height, self.img_width) # input image size
 
         self.Tensor = torch.cuda.FloatTensor
         self.LongTensor = torch.cuda.LongTensor
@@ -281,7 +294,7 @@ class Trans():
         self.criterion_l2 = torch.nn.MSELoss().to(device)
         self.criterion_cls = torch.nn.CrossEntropyLoss().to(device)
 
-        self.model = ViT().to(device)
+        self.model = ViT().to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
@@ -298,6 +311,8 @@ class Trans():
         self.train_label = self.total_data.item()['y_train'] # GROUP10
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
         self.test_label = self.total_data.item()['y_test'] #GROUP10
+
+        _, self.img_height, self.image_width = self.train_data.shape # might not be necessary
         return self.train_data, self.train_label, self.test_data, self.test_label
         # below is a lot of stuff we don't need.
         # print(self.train_data.shape, self.train_label.shape)
@@ -385,6 +400,16 @@ class Trans():
         W = spatial_filter(X, y)
         X_out = (X - mu) / sigma
         return X_out, mu, sigma, W
+
+    def crossVal(k:int):
+        pass
+        # split HERE # split training into [train, validation]
+        # for cheeks in ass: # iterate over all train-validation splits
+        #     self.preprocessing(xtrain,ytrain) # preprocess the data
+            # apply preprocessing to validation set
+            # train the network
+            # apply on validation set
+            # save statistics
 
     def train(self):
 
