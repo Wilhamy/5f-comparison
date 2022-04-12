@@ -10,6 +10,7 @@ import random
 import time
 import scipy.io
 from sklearn import preprocessing
+from sklearn import model_selection
 
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -251,7 +252,10 @@ class channel_attention(nn.Module):
 
 
 class Trans():
-    def __init__(self, path:str, filename:str, outdir:str, slice_size=10, h=5, batch_size=50,n_epochs=2000,c_dim=4,lr=0.0002,b1=0.5,b2=0.9):
+    def __init__(self, path:str, filename:str, outdir:str, 
+        slice_size=10, h=5, 
+        batch_size=50, n_epochs=2000, c_dim=4,
+        lr=0.0002,b1=0.5,b2=0.9):
         '''__init__ - initialization for the Trans class
         Necessary Inputs:
             path (str) - path to the data
@@ -264,6 +268,8 @@ class Trans():
         '''
         super(Trans, self).__init__()
         assert filename != '' # cannot be empty
+        assert path != ''
+        assert outdir != ''
         self.path = path # path to datafile
         self.filename = filename # include whole path to file here as well
         self.outdir = outdir #output directory
@@ -303,6 +309,7 @@ class Trans():
         self.centers = {}
 
     # returns NONE
+    # pulls data from the datafile in this object's fields
     def get_source_data(self):
 
         # to get the data of target subject
@@ -389,7 +396,6 @@ class Trans():
     # Input: X - the (training) data
     #        y - the labels
     # Returns:
-    #   X_out - the standardized training data
     #   mu - the average over the training 
     #   sigma - the standard deviation over the training
     #   W (tuple) - the spatial filter weights
@@ -398,23 +404,69 @@ class Trans():
         mu = np.average(X)
         sigma = np.std(X)
         W = spatial_filter(X, y)
-        X_out = (X - mu) / sigma
-        return X_out, mu, sigma, W
+        return mu, sigma, W
 
-    def crossVal(k:int):
-        pass
+    '''crossVal - perform k-fold crossvalidation
+    Input: num_folds (int) - the number of folds for cross validation
+    Outputs:
+        avg_acc - the average k-fold crossvalidation accuracy
+        best_acc - the best accuracy on a fold
+    '''
+    def crossVal(self, num_folds:int): # NOTE: must run getSourceData before this method! Assume that it has been called?
+        print("Initiate cross-validation.")
+        #self.get_source_data()
+        ## formatting for splits found at https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html
+        kf = model_selection.KFold(n_splits=num_folds, random_state=42) # TODO: randomize random state?
+        kf.get_n_splits(self.train_data)
+        fold_num = 0 # number for this current fold
+        running_total_acc = 0 # used in calculating average accuracy
+        best_acc = -1   # used in reporting best accuracy
+        for train_idxs, val_idxs in kf.split(self.train_data):
+            print("Fold number %d", fold_num)
+            self.log.write(f"Fold number {fold_num}")
+            # Generate train and validation splits #
+            X_t = self.train_data[train_idxs]   # train split
+            y_t = self.train_labels[train_idxs] # train labels
+            X_v = self.train_data[val_idxs]     # validation split
+            y_v = self.train_labels[val_idxs]   # validation labels
+            # Generate filtered versions on the z-scored
+            mu, sigma, W = self.preprocessing(X_t, y_t)
+            X_t = W @ ((X_t - mu) / sigma)
+            X_v = W @ ((X_v - mu) / sigma) # TODO: consider einsum?
+            
+            # train model on training set and predict accuracy on validation set #
+            self.train(X_t, y_t) # TODO: edit train method to no longer use the self.parameters
+            pred, acc = self.classify(X_v, y_v) # TODO: write this method
+
+            # update accuracy statistics #
+            running_total_acc += acc
+            if best_acc < acc: best_acc = acc
+            print(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
+            self.log.write(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
+            fold_num += 1
+        avg_acc = running_total_acc / num_folds
+        return avg_acc, best_acc
+        # Proc: save statistics and calculate the avg. performance (what objective function should we use for validation?)
         # split HERE # split training into [train, validation]
-        # for cheeks in ass: # iterate over all train-validation splits
+        # for fold in numfolds: # iterate over all train-validation splits
         #     self.preprocessing(xtrain,ytrain) # preprocess the data
             # apply preprocessing to validation set
             # train the network
             # apply on validation set
             # save statistics
 
-    def train(self):
+    def train(self, train_data, train_label, val_data, val_label): # TODO: edit to take in the train data and labels
+        # TODO: FIX THIS METHOD DRASTICALLY
+        # GROUP10:
+        # both the train and validation sets are passed into this function to allow tracking of potential overfitting
+        # Note: It might be worthwhile to include a mode where val_data and val_label are empty and only statistics on
+        #       fit to training set are recorded.
 
-
-        img, label, test_data, test_label = self.get_source_data()
+        # img, label, test_data, test_label = self.get_source_data()
+        img = train_data
+        label = train_label
+        test_data = val_data # validation set is misnomered, per original authors
+        test_label = val_label
         img = torch.from_numpy(img)
         label = torch.from_numpy(label - 1)
 
@@ -439,7 +491,7 @@ class Trans():
         Y_true = 0
         Y_pred = 0
 
-        # Train the cnn model
+        # Train the model
         total_step = len(self.dataloader)
         curr_lr = self.lr
         # some better optimization strategy is worthy to explore. Sometimes terrible over-fitting.
@@ -471,9 +523,9 @@ class Trans():
                 train_acc = float((train_pred == label).cpu().numpy().astype(int).sum()) / float(label.size(0))
                 print('Epoch:', e,
                       '  Train loss:', loss.detach().cpu().numpy(),
-                      '  Test loss:', loss_test.detach().cpu().numpy(),
+                      '  Validation loss:', loss_test.detach().cpu().numpy(),
                       '  Train accuracy:', train_acc,
-                      '  Test accuracy is:', acc)
+                      '  Validation accuracy is:', acc)
                 self.log_write.write(str(e) + "    " + str(acc) + "\n")
                 num = num + 1
                 averAcc = averAcc + acc
@@ -484,12 +536,12 @@ class Trans():
 
         torch.save(self.model.module.state_dict(), 'model.pth')
         averAcc = averAcc / num
-        print('The average accuracy is:', averAcc)
-        print('The best accuracy is:', bestAcc)
-        self.log_write.write('The average accuracy is: ' + str(averAcc) + "\n")
-        self.log_write.write('The best accuracy is: ' + str(bestAcc) + "\n")
+        print('The average epoch accuracy is:', averAcc)
+        print('The best epoch accuracy is:', bestAcc)
+        self.log_write.write('The average epoch accuracy is: ' + str(averAcc) + "\n")
+        self.log_write.write('The best epoch accuracy is: ' + str(bestAcc) + "\n")
 
-        return bestAcc, averAcc, Y_true, Y_pred
+        return bestAcc, averAcc, Y_true, Y_pred # TODO: edit what is being returned
 
 
 def main():
@@ -529,8 +581,8 @@ def main():
     yt = Y_true
     yp = Y_pred
 
-    best = best / 9
-    aver = aver / 9
+    # best = best / 9
+    # aver = aver / 9
     # plot_confusion_matrix(yt, yp, 666)
     result_write.write('**The average Best accuracy is: ' + str(best) + "\n")
     result_write.write('The average Aver accuracy is: ' + str(aver) + "\n")
