@@ -48,8 +48,16 @@ if torch.cuda.is_available():
   dev = "cuda:0" 
 else:  
   dev = "cpu"  
+
 device = torch.device(dev)  
 
+####################### DEFINE SOME GLOBAL VARIABLES ################
+#  To be put in another file                                        #
+#  Stuff like layer sizes, number of time channels etc.             #
+n_classes = 5
+n_principle_comp = 4
+n_time_steps=170                                                                  
+#####################################################################
 
 class PatchEmbedding(nn.Module):
     def __init__(self, emb_size):
@@ -173,12 +181,12 @@ class ClassificationHead(nn.Sequential):
 
 
 class ViT(nn.Sequential):
-    def __init__(self, emb_size=10, depth=3, n_classes=4, **kwargs):
+    def __init__(self, n_time_steps:int,emb_size=10, depth=4, n_classes=n_classes, **kwargs):
         super().__init__(
             # channel_attention(),
             ResidualAdd(
                 nn.Sequential(
-                    nn.LayerNorm(3400),
+                    nn.LayerNorm(n_time_steps),
                     channel_attention(),
                     nn.Dropout(0.5),
                 )
@@ -198,23 +206,23 @@ class channel_attention(nn.Module):
         self.extract_sequence = int(self.sequence_num / self.inter)  # You could choose to do that for less computation
 
         self.query = nn.Sequential(
-            nn.Linear(16, 16),
-            nn.LayerNorm(16),  # also may introduce improvement to a certain extent
+            nn.Linear(n_classes*n_principle_comp, n_classes*n_principle_comp),
+            nn.LayerNorm(n_classes*n_principle_comp),  # also may introduce improvement to a certain extent
             nn.Dropout(0.3)
         )
         self.key = nn.Sequential(
-            nn.Linear(16, 16),
+            nn.Linear(n_classes*n_principle_comp, n_classes*n_principle_comp),
             # nn.LeakyReLU(),
-            nn.LayerNorm(16),
+            nn.LayerNorm(n_classes*n_principle_comp),
             nn.Dropout(0.3)
         )
 
         # self.value = self.key
         self.projection = nn.Sequential(
-            nn.Linear(16, 16),
+            nn.Linear(n_classes*n_principle_comp, n_classes*n_principle_comp),
             # nn.LeakyReLU(),
-            nn.LayerNorm(16),
-            nn.Dropout(0.3),
+            nn.LayerNorm(n_classes*n_principle_comp),
+            nn.Dropout(0.3)
         )
 
         self.drop_out = nn.Dropout(0)
@@ -277,8 +285,8 @@ class Trans():
         self.n_epochs = n_epochs # number of epochs
         self.heads = h # number of heads
         self.slice_size = slice_size # number of slices for attention
-        # self.img_height = img_height # number of channels # removed
-        # self.img_width = img_width # time series size? # removed
+        # self.n_Ceeg = None # number of Ceeg channels
+        self.n_time_steps = 170 # time series size
         # self.channels = channels # TODO: remove me?
         self.c_dim = c_dim   # convolution dimension?
         self.lr = lr # learning rate
@@ -296,11 +304,13 @@ class Trans():
         self.Tensor = torch.cuda.FloatTensor
         self.LongTensor = torch.cuda.LongTensor
 
+        # self.Tensor = torch.FloatTensor
+        # self.LongTensor = torch.LongTensor
         self.criterion_l1 = torch.nn.L1Loss().to(device)
         self.criterion_l2 = torch.nn.MSELoss().to(device)
         self.criterion_cls = torch.nn.CrossEntropyLoss().to(device)
 
-        self.model = ViT().to(device) # TODO: GROUP10 include the number of classes here
+        self.model = ViT(n_time_steps=self.n_time_steps).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
@@ -314,73 +324,14 @@ class Trans():
 
         # to get the data of target subject
         self.total_data = np.load(os.path.join(self.path,self.filename), allow_pickle=True)
+        
         self.train_data = self.total_data.item()['x_train'].transpose(0,2,1) # GROUP10; transposed to form n x Ceeg x T
         self.train_labels = self.total_data.item()['y_train'] # GROUP10
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
         self.test_labels = self.total_data.item()['y_test'] #GROUP10
 
-        _, self.img_height, self.image_width = self.train_data.shape # might not be necessary
+        # _, self.n_Ceeg, self.n_time_steps = self.train_data.shape # might not be necessary
         return self.train_data, self.train_labels, self.test_data, self.test_labels
-        # below is a lot of stuff we don't need.
-        # print(self.train_data.shape, self.train_label.shape)
-        # print(self.test_data.shape, self.test_label.shape)
-        # GROUP10
-        ## z-score standardization
-        # self.train_data = 
-        # END GROUP10
-        
-        # START NOT US
-        # self.train_data = np.transpose(self.train_data, (2, 1, 0)) #OG
-        # self.train_data = np.expand_dims(self.train_data, axis=1) #OG
-        # self.train_label = np.transpose(self.train_label) #OG
-
-        # self.allData = self.train_data #OG
-        # self.allLabel = self.train_label[0] #OG
-
-        # test data
-        # to get the data of target subject
-        # self.test_tmp = scipy.io.loadmat(self.root + 'A0%dE.mat' % self.nSub)
-        # self.test_data = self.total_data.item()['x_test']
-        # self.test_label = self.total_data.item()['y_test']
-
-        # self.train_data = self.train_data[250:1000, :, :]
-        # self.test_data = np.transpose(self.test_data, (2, 1, 0))
-        # self.test_data = np.expand_dims(self.test_data, axis=1)
-        # self.test_label = np.transpose(self.test_label)
-
-        # self.testData = self.test_data
-        # self.testLabel = self.test_label
-
-        # Mix the train and test data - a quick way to get start
-        # But I agree, just shuffle data is a bad measure
-        # You could choose cross validation, or get more data from more subjects, then Leave one subject out
-        # all_data = np.concatenate((self.allData, self.testData), 0) # what is this concat???
-        # all_label = np.concatenate((self.allLabel, self.testLabel), 0)
-        # all_shuff_num = np.random.permutation(len(all_data))
-        # all_data = all_data[all_shuff_num]
-        # all_label = all_label[all_shuff_num]
-        # END NOT US
-
-        # self.allData = all_data[:641]
-        # self.allLabel = all_label[:641]
-        # self.testData = all_data[641:] ##### Group10 note: the number 641 here is chosen based on test, train split ####
-        # self.testLabel = all_label[641:] ##TODO: make it a floor function
-
-        ### TODO: GROUP10
-        #  PROBABLY BETTER NOT TO USE ANY OF THE CODE ABOVE SINCE WE ALREADY CREATED 
-        # TRAIN TEST SPLIT. THE ONLY PART WORTH KEEPING MIGHT BE THE CONCATANATING ALL THE DATA###
-
-        # standardize # DON"T STANDARDIZE HERE. STANDARDIZE IN training
-        # target_mean = np.mean(self.allData)
-        # target_std = np.std(self.allData)
-        # self.allData = (self.allData - target_mean) / target_std
-        # self.testData = (self.testData - target_mean) / target_std
-
-        # tmp_alldata = np.transpose(np.squeeze(self.allData), (0, 2, 1))
-        # Wb = spatial_filter(tmp_alldata, self.allLabel-1)  # common spatial pattern
-        # self.allData = np.einsum('abcd, ce -> abed', self.allData, Wb)
-        # self.testData = np.einsum('abcd, ce -> abed', self.testData, Wb)
-        # return self.allData, self.allLabel, self.testData, self.testLabel
 
     def update_lr(self, optimizer, lr):
         for param_group in optimizer.param_groups:
@@ -404,7 +355,7 @@ class Trans():
         mu = np.average(X)
         sigma = np.std(X)
         W = spatial_filter(X, y)
-        return mu, sigma, W
+        return mu, sigma, W.T
 
     '''crossVal - perform k-fold crossvalidation
     Input: num_folds (int) - the number of folds for cross validation
@@ -434,10 +385,20 @@ class Trans():
             y_v = self.train_labels[val_idxs]   # validation labels
             # Generate filtered versions on the z-scored
             mu, sigma, W = self.preprocessing(X_t, y_t)
-            X_t = W @ ((X_t - mu) / sigma)
-            X_v = W @ ((X_v - mu) / sigma) # TODO: consider einsum?
-            print(f"X_t shape:{X_t.shape}")
-            print(f"X_v shape:{X_v.shape}")
+            
+            
+            X_t = np.expand_dims((X_t - mu) / sigma, axis=1) # add channel dimension for convolution
+            X_v = np.expand_dims((X_v - mu) / sigma, axis=1)
+            print(f"X_t shape before dot product:{X_t.shape}")
+            print(f"X_v shape before dot product:{X_v.shape}")     
+            # do dot product
+            print(f"W shape: {W.shape}")
+            X_t = np.einsum('abcd, ce -> abed', X_t, W)
+            X_v = np.einsum('abcd, ce -> abed', X_v, W) # TODO: consider einsum?
+
+            
+            print(f"W dot X_t shape :{X_t.shape}")
+            print(f"W dot X_v shape:{X_v.shape}")
             _, tcounts = np.unique(y_t, return_counts=True)
             _, vcounts = np.unique(y_v, return_counts=True)
             print(f"y_t counts:{tcounts}")
@@ -515,11 +476,13 @@ class Trans():
             for i, (img, label) in enumerate(self.dataloader):
 
                 img = Variable(img.to(device).type(self.Tensor))
-                img = img.reshape((img.shape[0], img.shape[1]*img.shape[2]))
                 print(f"img shape; {img.shape}")
                 label = Variable(label.to(device).type(self.LongTensor))
                 tok, outputs = self.model(img)
+                print(f"outputs: {outputs}")
+                print(f"labels: {label}")
                 loss = self.criterion_cls(outputs, label)
+                print(f"loss: {loss}")
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
@@ -561,11 +524,11 @@ class Trans():
 def main():
     best = 0
     aver = 0
-    result_write = open(r"D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output\sub_result.txt", "w") # TODO: EDIT PATH
+    result_write = open(r"..\..\output\sub_result.txt", "w") # TODO: EDIT PATH
 
     #PATH = ''
-    DATADIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output'
-    OUTDIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output'
+    DATADIR = r'..\..\output'
+    OUTDIR = r'..\..\output'
     FILENAME = r'saved_data.npy'
     # for i in range(9): # TODO: change for loop? are they iterating over files?
     # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
