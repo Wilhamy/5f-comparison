@@ -22,7 +22,7 @@ from torch import Tensor
 
 from einops import rearrange, reduce, repeat
 from einops.layers.torch import Rearrange, Reduce
-# from common_spatial_pattern import csp
+from common_spatial_pattern import csp
 from spatial_filter import spatial_filter
 # from confusion_matrix import plot_confusion_matrix
 # from cm_no_normal import plot_confusion_matrix_nn
@@ -37,9 +37,15 @@ cudnn.deterministic = True
 # writer = SummaryWriter('/home/syh/Documents/MI/code/Trans/TensorBoardX/')
 
 # torch.cuda.set_device(6)
-gpus = [6]
-os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, gpus))
+# gpus = [6]
+# os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+# os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, gpus))
+torch.cuda.is_available()
+if torch.cuda.is_available():  
+    dev = "cuda:0" 
+else:  
+    dev = "cpu"  
+device = torch.device(dev)  
 
 
 class PatchEmbedding(nn.Module):
@@ -256,7 +262,7 @@ class Trans():
         self.b2 = 0.9
         self.nSub = nsub
         self.start_epoch = 0
-        self.root = '...'  # the path of data
+        self.root = '/Users/david/Documents/UMich/EECS_545/ml-project/standard_2a_data/'  # the path of data
 
         self.pretrain = False
 
@@ -264,16 +270,16 @@ class Trans():
 
         self.img_shape = (self.channels, self.img_height, self.img_width)  # something no use
 
-        self.Tensor = torch.cuda.FloatTensor
-        self.LongTensor = torch.cuda.LongTensor
+        self.Tensor = torch.FloatTensor
+        self.LongTensor = torch.LongTensor
 
-        self.criterion_l1 = torch.nn.L1Loss().cuda()
-        self.criterion_l2 = torch.nn.MSELoss().cuda()
-        self.criterion_cls = torch.nn.CrossEntropyLoss().cuda()
+        self.criterion_l1 = torch.nn.L1Loss().to(device)
+        self.criterion_l2 = torch.nn.MSELoss().to(device)
+        self.criterion_cls = torch.nn.CrossEntropyLoss().to(device)
 
-        self.model = ViT().cuda()
-        self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
-        self.model = self.model.cuda()
+        self.model = ViT().to(device)
+        # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
+        self.model = self.model.to(device)
         summary(self.model, (1, 16, 1000))
 
         self.centers = {}
@@ -327,7 +333,7 @@ class Trans():
         self.testData = (self.testData - target_mean) / target_std
 
         tmp_alldata = np.transpose(np.squeeze(self.allData), (0, 2, 1))
-        Wb = spatial_filter(tmp_alldata, self.allLabel-1)  # common spatial pattern
+        Wb = csp(tmp_alldata, self.allLabel-1)  # common spatial pattern
         self.allData = np.einsum('abcd, ce -> abed', self.allData, Wb)
         self.testData = np.einsum('abcd, ce -> abed', self.testData, Wb)
         return self.allData, self.allLabel, self.testData, self.testLabel
@@ -381,8 +387,9 @@ class Trans():
             self.model.train()
             for i, (img, label) in enumerate(self.dataloader):
 
-                img = Variable(img.cuda().type(self.Tensor))
-                label = Variable(label.cuda().type(self.LongTensor))
+                img = Variable(img.to(device).type(self.Tensor))
+                label = Variable(label.to(device).type(self.LongTensor))
+                # print("iteration ", i, "img.shape: ", img.shape)
                 tok, outputs = self.model(img)
                 loss = self.criterion_cls(outputs, label)
                 self.optimizer.zero_grad()
