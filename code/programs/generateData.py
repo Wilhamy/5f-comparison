@@ -11,8 +11,8 @@ import os
 from torch import save
 # also need to import the transformer
 
-DATADIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\raw'# Path to the data
-OUTDIR = r'D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\output'
+DATADIR = r'D:\aditya\UMich\EECS545\Project\ml-project\raw'# Path to the data
+OUTDIR = r'D:\aditya\UMich\EECS545\Project\ml-project\output'
 
 
 ## TODO: START FOR HERE
@@ -42,7 +42,7 @@ for j in range(examples.shape[2]):
 # this part seems to be already done in the data_loader in Trans.py
 
 # train test split
-x_train, x_test, y_train, y_test = train_test_split(examples, labels, test_size=0.33, random_state=42)
+x_train, x_test, y_train, y_test = train_test_split(examples, labels, test_size=0.10, random_state=42)
 save_data = {}
 save_data["x_train"] = x_train
 save_data["x_test"] = x_test
@@ -54,4 +54,4 @@ _, testcounts = np.unique(y_test, return_counts=True)
 print('train:', traincounts)
 print('test:', testcounts)
 
-# np.save("..\..\output\saved_data.npy", save_data)
+np.save("..\..\output\saved_data.npy", save_data)

@@ -199,7 +199,7 @@ class ViT(nn.Sequential):
 
 
 class channel_attention(nn.Module):
-    def __init__(self, sequence_num=1000, inter=30):
+    def __init__(self, sequence_num=n_time_steps, inter=30):
         super(channel_attention, self).__init__()
         self.sequence_num = sequence_num
         self.inter = inter
@@ -262,7 +262,7 @@ class channel_attention(nn.Module):
 class Trans():
     def __init__(self, path:str, filename:str, outdir:str, 
         slice_size=10, h=5, 
-        batch_size=50, n_epochs=2000, c_dim=4,
+        batch_size=50, n_epochs=3000, c_dim=4,
         lr=0.0002,b1=0.5,b2=0.9):
         '''__init__ - initialization for the Trans class
         Necessary Inputs:
@@ -476,20 +476,18 @@ class Trans():
             for i, (img, label) in enumerate(self.dataloader):
 
                 img = Variable(img.to(device).type(self.Tensor))
-                print(f"img shape; {img.shape}")
+               
                 label = Variable(label.to(device).type(self.LongTensor))
                 tok, outputs = self.model(img)
-                print(f"outputs: {outputs}")
-                print(f"labels: {label}")
                 loss = self.criterion_cls(outputs, label)
-                print(f"loss: {loss}")
+                
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
             out_epoch = time.time()
 
-            if (e + 1) % 1 == 0: # TODO: report step size
+            if (e + 1) % 10 == 0: # TODO: report step size
                 self.model.eval()
                 Tok, Cls = self.model(test_data)
 
@@ -511,7 +509,7 @@ class Trans():
                     Y_true = test_label
                     Y_pred = y_pred
 
-        torch.save(self.model.module.state_dict(), 'model.pth')
+        #torch.save(self.model.module.state_dict(), 'model.pth')
         averAcc = averAcc / num
         print('The average epoch accuracy is:', averAcc)
         print('The best epoch accuracy is:', bestAcc)
@@ -544,7 +542,7 @@ def main():
 
     # get the data and start the training process
     trans.get_source_data()
-    bestAcc, averAcc, Y_true, Y_pred = trans.crossVal(2)
+    bestAcc, averAcc, Y_true, Y_pred = trans.crossVal(5)
 
     print('THE BEST ACCURACY IS ' + str(bestAcc))
     print(f"Averac: {averAcc}")
