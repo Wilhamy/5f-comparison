@@ -310,6 +310,8 @@ class Trans():
         self.criterion_l2 = torch.nn.MSELoss().to(device)
         self.criterion_cls = torch.nn.CrossEntropyLoss().to(device)
 
+        self.get_source_data()
+
         self.model = ViT(n_time_steps=self.n_time_steps).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
@@ -320,6 +322,7 @@ class Trans():
 
     # returns NONE
     # pulls data from the datafile in this object's fields
+    # also sets image height and width
     def get_source_data(self):
 
         # to get the data of target subject
@@ -330,7 +333,7 @@ class Trans():
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
         self.test_labels = self.total_data.item()['y_test'] #GROUP10
 
-        # _, self.n_Ceeg, self.n_time_steps = self.train_data.shape # might not be necessary
+        _, self.n_Ceeg, self.n_time_steps = self.train_data.shape
         return self.train_data, self.train_labels, self.test_data, self.test_labels
 
     def update_lr(self, optimizer, lr):
