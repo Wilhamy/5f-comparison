@@ -531,11 +531,17 @@ class Trans():
 def main():
     best = 0
     aver = 0
-    result_write = open(r"..\..\output\sub_result.txt", "w") # TODO: EDIT PATH
+    result_write = open(os.path.join('.', 'output', 'sub_result.txt'), "w") # TODO: EDIT PATH
+
+    ### EDICT FROM THE POWERS ABOVE:
+    ###   THIS PROGRAM SHALL BE EXECUTED FROM THE TOPMOST DIRECTORY
+    ###   IN THE GIT REPOSITORY. ABSOLUTE PATHS ARE ABSOLUTELY FORBIDDEN.
+    ### I HAVE SPOKEN.
+    ### NEGLEGENCE TO FOLLOW THESE RULES WILL RESULT IN DEATH.
 
     #PATH = ''
-    DATADIR = os.path.join('..','..','output')#r'..\..\output'
-    OUTDIR = os.path.join('..','..','output')#r'..\..\output'
+    DATADIR = os.path.join('.','output')#r'..\..\output'
+    OUTDIR  = os.path.join('.','output')#r'..\..\output'
     FILENAME = r'saved_data.npy'
     # for i in range(9): # TODO: change for loop? are they iterating over files?
     # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
