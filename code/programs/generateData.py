@@ -42,7 +42,7 @@ for j in range(examples.shape[2]):
 # this part seems to be already done in the data_loader in Trans.py
 
 # train test split
-x_train, x_test, y_train, y_test = train_test_split(examples, labels, test_size=0.10, random_state=42)
+x_train, x_test, y_train, y_test = train_test_split(examples, labels, test_size=0.2, random_state=42)
 save_data = {}
 save_data["x_train"] = x_train
 save_data["x_test"] = x_test

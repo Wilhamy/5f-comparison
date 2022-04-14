@@ -262,7 +262,7 @@ class channel_attention(nn.Module):
 class Trans():
     def __init__(self, path:str, filename:str, outdir:str, 
         slice_size=10, h=5, 
-        batch_size=50, n_epochs=3000, c_dim=4,
+        batch_size=50, n_epochs=1000, c_dim=4,
         lr=0.0002,b1=0.5,b2=0.9):
         '''__init__ - initialization for the Trans class
         Necessary Inputs:
@@ -476,9 +476,10 @@ class Trans():
             for i, (img, label) in enumerate(self.dataloader):
 
                 img = Variable(img.to(device).type(self.Tensor))
-               
+                # print(f"img shape: {img.shape}")
                 label = Variable(label.to(device).type(self.LongTensor))
                 tok, outputs = self.model(img)
+                # print(f"output size: {outputs.shape}")
                 loss = self.criterion_cls(outputs, label)
                 
                 self.optimizer.zero_grad()
@@ -487,12 +488,14 @@ class Trans():
 
             out_epoch = time.time()
 
-            if (e + 1) % 10 == 0: # TODO: report step size
+            if (e + 1) % 1 == 0: # TODO: report step size
                 self.model.eval()
                 Tok, Cls = self.model(test_data)
 
                 loss_test = self.criterion_cls(Cls, test_label)
                 y_pred = torch.max(Cls, 1)[1]
+                # print(f"predicted labels: {y_pred}")
+                # print(f"test_label: {test_label}")
                 acc = float((y_pred == test_label).cpu().numpy().astype(int).sum()) / float(test_label.size(0))
                 train_pred = torch.max(outputs, 1)[1]
                 train_acc = float((train_pred == label).cpu().numpy().astype(int).sum()) / float(label.size(0))
@@ -542,7 +545,7 @@ def main():
 
     # get the data and start the training process
     trans.get_source_data()
-    bestAcc, averAcc, Y_true, Y_pred = trans.crossVal(5)
+    bestAcc, averAcc, Y_true, Y_pred = trans.crossVal(10)
 
     print('THE BEST ACCURACY IS ' + str(bestAcc))
     print(f"Averac: {averAcc}")
