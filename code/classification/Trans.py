@@ -60,14 +60,14 @@ n_principle_comp = 4
 #####################################################################
 
 class PatchEmbedding(nn.Module):
-    def __init__(self, emb_size, kc):
+    def __init__(self, num_classes, num_pcs, emb_size, kc):
         # self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Sequential(
             nn.Conv2d(1, 2, (1, kc), (1, 1)),
             nn.BatchNorm2d(2),
             nn.LeakyReLU(0.2),
-            nn.Conv2d(2, emb_size, (16, 5), stride=(1, 5)), # TODO: WHAT IS THIS 16??{num_classes * num_pcs} WHO IS THIS 5???? 
+            nn.Conv2d(2, emb_size, (num_classes*num_pcs, 5), stride=(1, 5)), # TODO: WHAT IS THIS 16??{num_classes * num_pcs} WHO IS THIS 5???? 
             Rearrange('b e (h) (w) -> b (h w) e'),
         )
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_size))
@@ -181,20 +181,20 @@ class ClassificationHead(nn.Sequential):
 
 
 class ViT(nn.Sequential):
-    def __init__(self, n_classes, Nf, n_time_steps:int,emb_size=10, depth=4, kc=51, num_heads=5, **kwargs):
+    def __init__(self, Nf, num_classes, num_pcs, n_time_steps:int,emb_size=10, depth=4, kc=51, num_heads=5, **kwargs):
         super().__init__(
             # channel_attention(),
             ResidualAdd(
                 nn.Sequential(
                     nn.LayerNorm(n_time_steps),
-                    channel_attention(n_time_steps, n_classes),
+                    channel_attention(n_time_steps, num_classes),
                     nn.Dropout(0.5),
                 )
             ),
 
-            PatchEmbedding(emb_size, kc),
+            PatchEmbedding(num_classes, num_pcs, emb_size, kc),
             TransformerEncoder(depth, emb_size, num_heads=num_heads, Nf=Nf), # TODO: GROUP10: include heads (hyperparameter)?
-            ClassificationHead(emb_size, n_classes)
+            ClassificationHead(emb_size, num_classes)
         )
 
 
@@ -261,7 +261,7 @@ class channel_attention(nn.Module):
 
 class Trans():
     def __init__(self, path:str, filename:str, outdir:str, 
-        slice_size=10, h=5, kc=51, Nf=4,
+        slice_size=10, h=5, kc=51, Nf=4, pcs=4,
         batch_size=50, n_epochs=1000, c_dim=4,
         lr=0.0002,b1=0.5,b2=0.9):
         '''__init__ - initialization for the Trans class
@@ -288,6 +288,7 @@ class Trans():
         self.slice_size = slice_size # number of slices for attention
         self.kc = kc # convolution filter size
         self.Nf = Nf # ff size expansion
+        self.n_pcs = pcs # number of principal components
         # self.n_Ceeg = None # number of Ceeg channels
         # self.n_time_steps = 170 # time series size
         # self.channels = channels # TODO: remove me?
@@ -315,7 +316,7 @@ class Trans():
 
         self.get_source_data()
 
-        self.model = ViT(Nf = Nf, n_time_steps=self.n_time_steps, n_classes=self.num_classes, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
+        self.model = ViT(Nf = self.Nf, num_pcs=self.n_pcs, n_time_steps=self.n_time_steps, n_classes=self.num_classes, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
