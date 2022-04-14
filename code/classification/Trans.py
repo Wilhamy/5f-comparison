@@ -300,19 +300,23 @@ class Trans():
         # self.log_write = open(os.path.join(self.outdir,f"log_{filename[:-4]}.txt"), "w") # TODO: CHANGE ME
 
         # self.img_shape = (self.img_height, self.img_width) # input image size
-
-        self.Tensor = torch.cuda.FloatTensor
-        self.LongTensor = torch.cuda.LongTensor
+        if dev == "cpu":
+            self.Tensor = torch.FloatTensor
+            self.LongTensor = torch.LongTensor
+        else:
+            self.Tensor = torch.cuda.FloatTensor
+            self.LongTensor = torch.cuda.LongTensor
 
         # self.Tensor = torch.FloatTensor
         # self.LongTensor = torch.LongTensor
         self.criterion_l1 = torch.nn.L1Loss().to(device)
         self.criterion_l2 = torch.nn.MSELoss().to(device)
         self.criterion_cls = torch.nn.CrossEntropyLoss().to(device)
-
+        self.get_source_data()
         self.model = ViT(n_time_steps=self.n_time_steps).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
+        
         # summary(self.model, (1, 16, 1000))
         print("HERE BE SUMMARY")
 
@@ -329,8 +333,9 @@ class Trans():
         self.train_labels = self.total_data.item()['y_train'] # GROUP10
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
         self.test_labels = self.total_data.item()['y_test'] #GROUP10
+        print("train_data", self.train_data.shape)
 
-        # _, self.n_Ceeg, self.n_time_steps = self.train_data.shape # might not be necessary
+        _, self.n_Ceeg, self.n_time_steps = self.train_data.shape # might not be necessary
         return self.train_data, self.train_labels, self.test_data, self.test_labels
 
     def update_lr(self, optimizer, lr):
@@ -525,11 +530,11 @@ class Trans():
 def main():
     best = 0
     aver = 0
-    result_write = open(r"..\..\output\sub_result.txt", "w") # TODO: EDIT PATH
+    result_write = open(os.path.join(".." , "..", "output", "sub_result.txt"), "w") # TODO: EDIT PATH
 
     #PATH = ''
-    DATADIR = r'..\..\output'
-    OUTDIR = r'..\..\output'
+    DATADIR = os.path.join(".." , "..", "output")
+    OUTDIR = os.path.join(".." , "..", "output")
     FILENAME = r'saved_data.npy'
     # for i in range(9): # TODO: change for loop? are they iterating over files?
     # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
@@ -544,7 +549,7 @@ def main():
     trans = Trans(DATADIR, FILENAME, outdir=OUTDIR)
 
     # get the data and start the training process
-    trans.get_source_data()
+   
     bestAcc, averAcc, Y_true, Y_pred = trans.crossVal(10)
 
     print('THE BEST ACCURACY IS ' + str(bestAcc))
