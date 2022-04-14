@@ -26,6 +26,7 @@ from torch import Tensor
 from einops import rearrange, reduce, repeat
 from einops.layers.torch import Rearrange, Reduce
 # from common_spatial_pattern import csp
+import itertools
 from spatial_filter import spatial_filter
 # from confusion_matrix import plot_confusion_matrix
 # from cm_no_normal import plot_confusion_matrix_nn
@@ -63,7 +64,7 @@ class PatchEmbedding(nn.Module):
     def __init__(self, num_classes, num_pcs, emb_size, kc):
         # self.patch_size = patch_size
         super().__init__()
-        self.projection = nn.Sequential(
+        self.projection = nn.Sequential( # TODO: We could add more conv + norm layers
             nn.Conv2d(1, 2, (1, kc), (1, 1)),
             nn.BatchNorm2d(2),
             nn.LeakyReLU(0.2),
@@ -316,7 +317,7 @@ class Trans():
 
         self.get_source_data()
 
-        self.model = ViT(Nf = self.Nf, num_pcs=self.n_pcs, n_time_steps=self.n_time_steps, n_classes=self.num_classes, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
+        self.model = ViT(Nf = self.Nf, num_classes=self.num_classes, num_pcs=self.n_pcs, n_time_steps=self.n_time_steps, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
@@ -333,6 +334,8 @@ class Trans():
         self.total_data = np.load(os.path.join(self.path,self.filename), allow_pickle=True)
         
         self.train_data = self.total_data.item()['x_train'].transpose(0,2,1) # GROUP10; transposed to form n x Ceeg x T
+        print(self.train_data.shape)
+
         self.train_labels = self.total_data.item()['y_train'] # GROUP10
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
         self.test_labels = self.total_data.item()['y_test'] #GROUP10
@@ -371,10 +374,12 @@ class Trans():
         avg_accs - the average k-fold crossvalidation accuracies
         best_accs - the best accuracy on each fold
     '''
-    def crossVal(self, num_folds:int): # NOTE: must run getSourceData before this method! Assume that it has been called?
+    def crossVal(self, num_folds:int, params, log=''): # NOTE: must run getSourceData before this method! Assume that it has been called?
         print("Initiate cross-validation.")
         #self.get_source_data()
         ## formatting for splits found at https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html
+        #{slicesize},{heads},{kc},{Nf}
+        slicesize, heads, kc, Nf = params
         kf = model_selection.KFold(n_splits=num_folds, random_state=42, shuffle=True) # TODO: randomize random state?
         kf.get_n_splits(self.train_data)
         fold_num = 0 # number for this current fold
@@ -384,7 +389,7 @@ class Trans():
         Y_trues = []
         Y_preds = []
         for train_idxs, val_idxs in kf.split(self.train_data):
-            print("Fold number %d", fold_num)
+            print("Fold number ", fold_num)
             # self.log.write(f"Fold number {fold_num}")
             # Generate train and validation splits #
             X_t = self.train_data[train_idxs]   # train split
@@ -424,6 +429,8 @@ class Trans():
             # if best_acc < acc: best_acc = acc
             # print(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
             # self.log.write(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
+            # Header: 'File,fold,slice,heads,kernel size,Nf,bestAcc,averAcc'
+            log.write(f'{self.filename},{fold_num},{slicesize},{heads},{kc},{Nf},{bestAcc},{averAcc}\n')
             fold_num += 1
         # avg_acc = running_total_acc / num_folds
         return averAccs, bestAccs
@@ -533,8 +540,6 @@ class Trans():
 def main():
     best = 0
     aver = 0
-    result_write = open(os.path.join('.', 'output', 'sub_result.txt'), "w") # TODO: EDIT PATH
-
     ### EDICT FROM THE POWERS ABOVE:
     ###   THIS PROGRAM SHALL BE EXECUTED FROM THE TOPMOST DIRECTORY
     ###   IN THE GIT REPOSITORY. ABSOLUTE PATHS ARE ABSOLUTELY FORBIDDEN.
@@ -545,8 +550,11 @@ def main():
     DATADIR = os.path.join('.','output')#r'..\..\output'
     OUTDIR  = os.path.join('.','output')#r'..\..\output'
     FILENAME = r'saved_data.npy'
+    result_write = open(os.path.join(OUTDIR, 'sub_result.csv'), "w") # TODO: EDIT PATH
+
     # for i in range(9): # TODO: change for loop? are they iterating over files?
     # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
+    ## Seed the random number generators
     seed_n = np.random.randint(500)
     print('seed is ' + str(seed_n))
     random.seed(seed_n)
@@ -555,34 +563,40 @@ def main():
     torch.cuda.manual_seed(seed_n)
     torch.cuda.manual_seed_all(seed_n)
     print(f'File {FILENAME}')
-    trans = Trans(DATADIR, FILENAME, outdir=OUTDIR)
 
-    # get the data and start the training process
-    trans.get_source_data()
-    bestAcc, averAcc, Y_true, Y_pred = trans.crossVal(10)
 
-    print('THE BEST ACCURACY IS ' + str(bestAcc))
-    print(f"Averac: {averAcc}")
-    result_write.write('File ' + FILENAME + ' : ' + 'Seed is: ' + str(seed_n) + "\n")
+    #slicesize, heads, kc, Nf
+    slicesize = [10]
+    heads = [7]
+    kc = [51]
+    Nf = [5,6]
+    params = itertools.product(slicesize,heads,kc,Nf)
+    num_folds = 2
+    ## Print header to log
+    result_write.write('File,fold,slice,heads,kernel size,Nf,bestAcc,averAcc\n')
+    for param_tuple in params:
+    ## Iterate over hyperparameter tuples
+        print("Params:", param_tuple)
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, n_epochs=1)
+        # get the data and start the training process
+        trans.get_source_data()
+        trans.crossVal(2, params=param_tuple, log=result_write)
+
+    # print('THE BEST ACCURACY IS ' + str(bestAcc))
+    # print(f"Averac: {averAcc}")
+    # result_write.write('File ' + FILENAME + ' : ' + 'Seed is: ' + str(seed_n) + "\n")
     # result_write.write('**File ' + FILENAME + ' : ' + 'The best accuracy is: ' + str(bestAcc) + "\n")
     # result_write.write('File ' + FILENAME + ' : ' + 'The average accuracy is: ' + str(averAcc) + "\n")
     # plot_confusion_matrix(Y_true, Y_pred, i+1)
-    best = best + bestAcc
-    aver = aver + averAcc
-    # if i == 0:
-    #     yt = Y_true
-    #     yp = Y_pred
-    # else:
-    #     yt = torch.cat((yt, Y_true)) # GROUP10: why cat?
-    #     yp = torch.cat((yp, Y_pred))
-    yt = Y_true
-    yp = Y_pred
+    # best = best + bestAcc # GROUP10: why best + bestAcc?
+    # aver = aver + averAcc # GROUP10: why + ?
 
-    # best = best / 9
-    # aver = aver / 9
+    # yt = Y_true
+    # yp = Y_pred
+
     # plot_confusion_matrix(yt, yp, 666)
-    result_write.write('**The average Best accuracy is: ' + str(best) + "\n")
-    result_write.write('The average Aver accuracy is: ' + str(aver) + "\n")
+    # result_write.write('**The average Best accuracy is: ' + str(best) + "\n")
+    # result_write.write('The average Aver accuracy is: ' + str(aver) + "\n")
     result_write.close()
 
 
