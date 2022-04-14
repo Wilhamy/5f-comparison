@@ -64,10 +64,10 @@ class PatchEmbedding(nn.Module):
         # self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Conv2d(1, 2, (1, kc), (1, 1)), # GROUP10: why these values? TODO: ANSWER: 51 is a hyperparameter that needs tuning! (kc)
+            nn.Conv2d(1, 2, (1, kc), (1, 1)),
             nn.BatchNorm2d(2),
             nn.LeakyReLU(0.2),
-            nn.Conv2d(2, emb_size, (16, 5), stride=(1, 5)),
+            nn.Conv2d(2, emb_size, (16, 5), stride=(1, 5)), # TODO: WHAT IS THIS 16??{num_classes * num_pcs} WHO IS THIS 5???? 
             Rearrange('b e (h) (w) -> b (h w) e'),
         )
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_size))
@@ -533,8 +533,8 @@ def main():
     result_write = open(r"..\..\output\sub_result.txt", "w") # TODO: EDIT PATH
 
     #PATH = ''
-    DATADIR = r'..\..\output'
-    OUTDIR = r'..\..\output'
+    DATADIR = os.path.join('..','..','output')#r'..\..\output'
+    OUTDIR = os.path.join('..','..','output')#r'..\..\output'
     FILENAME = r'saved_data.npy'
     # for i in range(9): # TODO: change for loop? are they iterating over files?
     # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
