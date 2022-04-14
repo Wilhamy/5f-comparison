@@ -54,9 +54,9 @@ device = torch.device(dev)
 ####################### DEFINE SOME GLOBAL VARIABLES ################
 #  To be put in another file                                        #
 #  Stuff like layer sizes, number of time channels etc.             #
-n_classes = 5
+# n_classes = 5
 n_principle_comp = 4
-n_time_steps=170                                                                  
+# n_time_steps=170                                                                  
 #####################################################################
 
 class PatchEmbedding(nn.Module):
@@ -181,13 +181,13 @@ class ClassificationHead(nn.Sequential):
 
 
 class ViT(nn.Sequential):
-    def __init__(self, n_time_steps:int,emb_size=10, depth=4, n_classes=n_classes, kc=51, num_heads=5, **kwargs):
+    def __init__(self, n_classes, n_time_steps:int,emb_size=10, depth=4, kc=51, num_heads=5, **kwargs):
         super().__init__(
             # channel_attention(),
             ResidualAdd(
                 nn.Sequential(
                     nn.LayerNorm(n_time_steps),
-                    channel_attention(),
+                    channel_attention(n_time_steps, n_classes),
                     nn.Dropout(0.5),
                 )
             ),
@@ -199,7 +199,7 @@ class ViT(nn.Sequential):
 
 
 class channel_attention(nn.Module):
-    def __init__(self, sequence_num=n_time_steps, inter=30):
+    def __init__(self, sequence_num, n_classes, inter=30): # TODO: why is sequence_num the same as n_time_steps
         super(channel_attention, self).__init__()
         self.sequence_num = sequence_num
         self.inter = inter
@@ -314,7 +314,7 @@ class Trans():
 
         self.get_source_data()
 
-        self.model = ViT(n_time_steps=self.n_time_steps, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
+        self.model = ViT(n_time_steps=self.n_time_steps, n_classes=self.num_classes, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
@@ -335,7 +335,8 @@ class Trans():
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
         self.test_labels = self.total_data.item()['y_test'] #GROUP10
 
-        _, self.n_Ceeg, self.n_time_steps = self.train_data.shape
+        _, self.n_Ceeg, self.n_time_steps = self.train_data.shape # image dimensions
+        self.num_classes = len(np.unique(self.train_labels)) # NOTE: assumes that there is at least one of each label is represented in the training labels set
         return self.train_data, self.train_labels, self.test_data, self.test_labels
 
     def update_lr(self, optimizer, lr):
