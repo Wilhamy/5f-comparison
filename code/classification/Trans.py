@@ -60,11 +60,11 @@ n_time_steps=170
 #####################################################################
 
 class PatchEmbedding(nn.Module):
-    def __init__(self, emb_size):
+    def __init__(self, emb_size, kc):
         # self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Sequential(
-            nn.Conv2d(1, 2, (1, 51), (1, 1)), # GROUP10: why these values? TODO: ANSWER: 51 is a hyperparameter that needs tuning! (kc)
+            nn.Conv2d(1, 2, (1, kc), (1, 1)), # GROUP10: why these values? TODO: ANSWER: 51 is a hyperparameter that needs tuning! (kc)
             nn.BatchNorm2d(2),
             nn.LeakyReLU(0.2),
             nn.Conv2d(2, emb_size, (16, 5), stride=(1, 5)),
@@ -162,8 +162,8 @@ class TransformerEncoderBlock(nn.Sequential):
 
 
 class TransformerEncoder(nn.Sequential):
-    def __init__(self, depth, emb_size):
-        super().__init__(*[TransformerEncoderBlock(emb_size) for _ in range(depth)])
+    def __init__(self, depth, emb_size, num_heads):
+        super().__init__(*[TransformerEncoderBlock(emb_size, num_heads=num_heads) for _ in range(depth)])
 
 
 class ClassificationHead(nn.Sequential):
@@ -181,7 +181,7 @@ class ClassificationHead(nn.Sequential):
 
 
 class ViT(nn.Sequential):
-    def __init__(self, n_time_steps:int,emb_size=10, depth=4, n_classes=n_classes, **kwargs):
+    def __init__(self, n_time_steps:int,emb_size=10, depth=4, n_classes=n_classes, kc=51, num_heads=5, **kwargs):
         super().__init__(
             # channel_attention(),
             ResidualAdd(
@@ -192,8 +192,8 @@ class ViT(nn.Sequential):
                 )
             ),
 
-            PatchEmbedding(emb_size),
-            TransformerEncoder(depth, emb_size), # TODO: GROUP10: include heads (hyperparameter)?
+            PatchEmbedding(emb_size, kc),
+            TransformerEncoder(depth, emb_size, num_heads=num_heads), # TODO: GROUP10: include heads (hyperparameter)?
             ClassificationHead(emb_size, n_classes)
         )
 
@@ -261,7 +261,7 @@ class channel_attention(nn.Module):
 
 class Trans():
     def __init__(self, path:str, filename:str, outdir:str, 
-        slice_size=10, h=5, 
+        slice_size=10, h=5, kc=51,
         batch_size=50, n_epochs=1000, c_dim=4,
         lr=0.0002,b1=0.5,b2=0.9):
         '''__init__ - initialization for the Trans class
@@ -283,10 +283,12 @@ class Trans():
         self.outdir = outdir #output directory
         self.batch_size = batch_size # size of batch
         self.n_epochs = n_epochs # number of epochs
+        # HyperParameters
         self.heads = h # number of heads
         self.slice_size = slice_size # number of slices for attention
+        self.kc = kc # convolution filter size
         # self.n_Ceeg = None # number of Ceeg channels
-        self.n_time_steps = 170 # time series size
+        # self.n_time_steps = 170 # time series size
         # self.channels = channels # TODO: remove me?
         self.c_dim = c_dim   # convolution dimension?
         self.lr = lr # learning rate
@@ -312,7 +314,7 @@ class Trans():
 
         self.get_source_data()
 
-        self.model = ViT(n_time_steps=self.n_time_steps).to(device) # TODO: GROUP10 include the number of classes here
+        self.model = ViT(n_time_steps=self.n_time_steps, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
