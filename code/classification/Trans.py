@@ -162,8 +162,8 @@ class TransformerEncoderBlock(nn.Sequential):
 
 
 class TransformerEncoder(nn.Sequential):
-    def __init__(self, depth, emb_size, num_heads):
-        super().__init__(*[TransformerEncoderBlock(emb_size, num_heads=num_heads) for _ in range(depth)])
+    def __init__(self, depth, emb_size, num_heads, Nf):
+        super().__init__(*[TransformerEncoderBlock(emb_size, num_heads=num_heads, forward_expansion=Nf) for _ in range(depth)])
 
 
 class ClassificationHead(nn.Sequential):
@@ -181,7 +181,7 @@ class ClassificationHead(nn.Sequential):
 
 
 class ViT(nn.Sequential):
-    def __init__(self, n_classes, n_time_steps:int,emb_size=10, depth=4, kc=51, num_heads=5, **kwargs):
+    def __init__(self, n_classes, Nf, n_time_steps:int,emb_size=10, depth=4, kc=51, num_heads=5, **kwargs):
         super().__init__(
             # channel_attention(),
             ResidualAdd(
@@ -193,7 +193,7 @@ class ViT(nn.Sequential):
             ),
 
             PatchEmbedding(emb_size, kc),
-            TransformerEncoder(depth, emb_size, num_heads=num_heads), # TODO: GROUP10: include heads (hyperparameter)?
+            TransformerEncoder(depth, emb_size, num_heads=num_heads, Nf=Nf), # TODO: GROUP10: include heads (hyperparameter)?
             ClassificationHead(emb_size, n_classes)
         )
 
@@ -261,7 +261,7 @@ class channel_attention(nn.Module):
 
 class Trans():
     def __init__(self, path:str, filename:str, outdir:str, 
-        slice_size=10, h=5, kc=51,
+        slice_size=10, h=5, kc=51, Nf=4,
         batch_size=50, n_epochs=1000, c_dim=4,
         lr=0.0002,b1=0.5,b2=0.9):
         '''__init__ - initialization for the Trans class
@@ -287,6 +287,7 @@ class Trans():
         self.heads = h # number of heads
         self.slice_size = slice_size # number of slices for attention
         self.kc = kc # convolution filter size
+        self.Nf = Nf # ff size expansion
         # self.n_Ceeg = None # number of Ceeg channels
         # self.n_time_steps = 170 # time series size
         # self.channels = channels # TODO: remove me?
@@ -314,7 +315,7 @@ class Trans():
 
         self.get_source_data()
 
-        self.model = ViT(n_time_steps=self.n_time_steps, n_classes=self.num_classes, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
+        self.model = ViT(Nf = Nf, n_time_steps=self.n_time_steps, n_classes=self.num_classes, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
