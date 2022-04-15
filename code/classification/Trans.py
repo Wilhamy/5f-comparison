@@ -189,7 +189,7 @@ class ViT(nn.Sequential):
                 nn.Sequential(
                     nn.LayerNorm(n_time_steps),
                     channel_attention(n_time_steps, num_classes),
-                    nn.Dropout(0.5),
+                    nn.Dropout(0.2), # original 0.5
                 )
             ),
 
@@ -209,13 +209,13 @@ class channel_attention(nn.Module):
         self.query = nn.Sequential(
             nn.Linear(n_classes*n_principle_comp, n_classes*n_principle_comp),
             nn.LayerNorm(n_classes*n_principle_comp),  # also may introduce improvement to a certain extent
-            nn.Dropout(0.3)
+            nn.Dropout(0.2) # original 0.3
         )
         self.key = nn.Sequential(
             nn.Linear(n_classes*n_principle_comp, n_classes*n_principle_comp),
             # nn.LeakyReLU(),
             nn.LayerNorm(n_classes*n_principle_comp),
-            nn.Dropout(0.3)
+            nn.Dropout(0.2) # 0.3
         )
 
         # self.value = self.key
@@ -223,7 +223,7 @@ class channel_attention(nn.Module):
             nn.Linear(n_classes*n_principle_comp, n_classes*n_principle_comp),
             # nn.LeakyReLU(),
             nn.LayerNorm(n_classes*n_principle_comp),
-            nn.Dropout(0.3)
+            nn.Dropout(0.2) #0.3
         )
 
         self.drop_out = nn.Dropout(0)
@@ -319,9 +319,8 @@ class Trans():
 
         self.model = ViT(Nf = self.Nf, num_classes=self.num_classes, num_pcs=self.n_pcs, n_time_steps=self.n_time_steps, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
         # self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
-        self.model = self.model.to(device)
         # summary(self.model, (1, 16, 1000))
-        print("HERE BE SUMMARY")
+        # print("HERE BE SUMMARY")
 
         self.centers = {}
 
@@ -334,7 +333,7 @@ class Trans():
         self.total_data = np.load(os.path.join(self.path,self.filename), allow_pickle=True)
         
         self.train_data = self.total_data.item()['x_train'].transpose(0,2,1) # GROUP10; transposed to form n x Ceeg x T
-        print(self.train_data.shape)
+        # print(self.train_data.shape)
 
         self.train_labels = self.total_data.item()['y_train'] # GROUP10
         self.test_data = self.total_data.item()['x_test'].transpose(0,2,1) #GROUP10; transposed to form n x Ceeg x T
@@ -395,7 +394,11 @@ class Trans():
         all_val_loss = []
         accs_los = {}
         for train_idxs, val_idxs in kf.split(self.train_data):
+            # re-init model for each fold to prevent cross contamination between train and validation
             print("Fold number ", fold_num)
+            print("reinit model")
+            self.model = ViT(Nf = self.Nf, num_classes=self.num_classes, num_pcs=self.n_pcs, n_time_steps=self.n_time_steps, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
+        
             # self.log.write(f"Fold number {fold_num}")
             # Generate train and validation splits #
             X_t = self.train_data[train_idxs]   # train split
@@ -408,20 +411,20 @@ class Trans():
             
             X_t = np.expand_dims((X_t - mu) / sigma, axis=1) # add channel dimension for convolution
             X_v = np.expand_dims((X_v - mu) / sigma, axis=1)
-            print(f"X_t shape before dot product:{X_t.shape}")
-            print(f"X_v shape before dot product:{X_v.shape}")     
+            # print(f"X_t shape before dot product:{X_t.shape}")
+            # print(f"X_v shape before dot product:{X_v.shape}")     
             # do dot product
-            print(f"W shape: {W.shape}")
+            # print(f"W shape: {W.shape}")
             X_t = np.einsum('abcd, ce -> abed', X_t, W)
             X_v = np.einsum('abcd, ce -> abed', X_v, W) # TODO: consider einsum?
 
             
-            print(f"W dot X_t shape :{X_t.shape}")
-            print(f"W dot X_v shape:{X_v.shape}")
+            # print(f"W dot X_t shape :{X_t.shape}")
+            # print(f"W dot X_v shape:{X_v.shape}")
             _, tcounts = np.unique(y_t, return_counts=True)
             _, vcounts = np.unique(y_v, return_counts=True)
-            print(f"y_t counts:{tcounts}")
-            print(f"y_v counts:{vcounts}")
+            # print(f"y_t counts:{tcounts}")
+            # print(f"y_v counts:{vcounts}")
             
             # train model on training set and predict accuracy on validation set #
             bestAcc, averAcc, Y_true, Y_pred, accs_losses = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
@@ -519,7 +522,7 @@ class Trans():
 
             out_epoch = time.time()
 
-            if (e + 1) % 1 == 0: # TODO: report step size
+            if (e + 1) % 100 == 0: # TODO: report step size
                 self.model.eval()
                 Tok, Cls = self.model(test_data)
 
@@ -576,29 +579,29 @@ def main():
     # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
     ## Seed the random number generators
     seed_n = np.random.randint(500)
-    print('seed is ' + str(seed_n))
+    # print('seed is ' + str(seed_n))
     random.seed(seed_n)
     np.random.seed(seed_n)
     torch.manual_seed(seed_n)
     torch.cuda.manual_seed(seed_n)
     torch.cuda.manual_seed_all(seed_n)
-    print(f'File {FILENAME}')
+    # print(f'File {FILENAME}')
 
 
     #slicesize, heads, kc, Nf
     slicesize = [10]
-    heads = [5,7]
-    kc = [51]
-    Nf = [5,6]
+    heads = list(range(1,11))
+    kc = [9,19,29,39,49,51,59,69]
+    Nf = [3,4,5,6,7,8]
     params = itertools.product(slicesize,heads,kc,Nf)
-    num_folds = 2
+    num_folds = 10
     ## Print header to log
     result_write.write('File,fold,slice,heads,kernel size,Nf,bestAcc,averAcc\n')
     params_acc_loss = {} # dictionary that maps hyperparams to all the training and val data associated with them {(param_ruple):accs_los}
     for param_tuple in params:
     ## Iterate over hyperparameter tuples
         print("Params:", param_tuple)
-        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, n_epochs=2)
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, n_epochs=1000)
         # get the data and start the training process
         trans.get_source_data()
         _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
