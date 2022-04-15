@@ -388,6 +388,12 @@ class Trans():
         averAccs = []
         Y_trues = []
         Y_preds = []
+
+        all_train_accs = []
+        all_train_loss = []
+        all_val_accs = []
+        all_val_loss = []
+        accs_los = {}
         for train_idxs, val_idxs in kf.split(self.train_data):
             print("Fold number ", fold_num)
             # self.log.write(f"Fold number {fold_num}")
@@ -418,22 +424,29 @@ class Trans():
             print(f"y_v counts:{vcounts}")
             
             # train model on training set and predict accuracy on validation set #
-            bestAcc, averAcc, Y_true, Y_pred = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
+            bestAcc, averAcc, Y_true, Y_pred, accs_losses = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
             # pred, acc = self.classify(X_v, y_v) # TODO: write this method # Is this necessary if testing on validation set can be done in self.train?
             bestAccs.append(bestAcc) # best accuracy in the train method
             averAccs.append(averAcc) # average accuracy from the train method
             Y_trues.append(Y_true)
             Y_preds.append(Y_pred)
-            # update accuracy statistics #
-            # running_total_acc += acc
-            # if best_acc < acc: best_acc = acc
-            # print(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
-            # self.log.write(f"\tValidation accuracy: {acc}\n\tBest acc so far: {best_acc}")
-            # Header: 'File,fold,slice,heads,kernel size,Nf,bestAcc,averAcc'
+            all_train_accs.append(accs_losses[0]) # train_accs
+            all_train_loss.append(accs_losses[1]) # train_losses
+            all_val_accs.append(accs_losses[2]) # val_accs
+            all_val_loss.append(accs_losses[3]) # val_losses
+           
             log.write(f'{self.filename},{fold_num},{slicesize},{heads},{kc},{Nf},{bestAcc},{averAcc}\n')
             fold_num += 1
         # avg_acc = running_total_acc / num_folds
-        return averAccs, bestAccs
+        # accuracies and losses for one set of hyperparameters
+        accs_los["all_train_accs"] = all_train_accs
+        accs_los["all_train_loss"] = all_train_loss
+        accs_los["all_val_accs"] = all_val_accs
+        accs_los["all_val_loss"] = all_val_loss
+        # np.save(os.path.join(self.outdir, 'accs_los.npy'), accs_los)
+
+        # return the average accs, best accs, and all the K-fold accuracies and losses (for train and val)
+        return averAccs, bestAccs, accs_los
         # Proc: save statistics and calculate the avg. performance (what objective function should we use for validation?)
         # split HERE # split training into [train, validation]
         # for fold in numfolds: # iterate over all train-validation splits
@@ -484,7 +497,10 @@ class Trans():
         curr_lr = self.lr
         # some better optimization strategy is worthy to explore. Sometimes terrible over-fitting.
 
-
+        train_accs = []
+        train_loss = []
+        val_accs = []
+        val_loss = []
         for e in range(self.n_epochs):
             in_epoch = time.time()
             self.model.train()
@@ -520,6 +536,10 @@ class Trans():
                       '  Train accuracy:', train_acc,
                       '  Validation accuracy is:', acc)
                 # self.log_write.write(str(e) + "    " + str(acc) + "\n")
+                train_accs.append(train_acc)
+                train_loss.append(loss.detach().cpu().numpy())
+                val_loss.append(loss_test.detach().cpu().numpy())
+                val_accs.append(acc)
                 num = num + 1
                 averAcc = averAcc + acc
                 if acc > bestAcc:
@@ -534,7 +554,7 @@ class Trans():
         # self.log_write.write('The average epoch accuracy is: ' + str(averAcc) + "\n")
         # self.log_write.write('The best epoch accuracy is: ' + str(bestAcc) + "\n")
 
-        return bestAcc, averAcc, Y_true, Y_pred # TODO: edit what is being returned
+        return bestAcc, averAcc, Y_true, Y_pred, (train_accs, train_loss, val_accs, val_loss) # TODO: edit what is being returned
 
 
 def main():
@@ -567,20 +587,23 @@ def main():
 
     #slicesize, heads, kc, Nf
     slicesize = [10]
-    heads = [7]
+    heads = [5,7]
     kc = [51]
     Nf = [5,6]
     params = itertools.product(slicesize,heads,kc,Nf)
     num_folds = 2
     ## Print header to log
     result_write.write('File,fold,slice,heads,kernel size,Nf,bestAcc,averAcc\n')
+    params_acc_loss = {} # dictionary that maps hyperparams to all the training and val data associated with them {(param_ruple):accs_los}
     for param_tuple in params:
     ## Iterate over hyperparameter tuples
         print("Params:", param_tuple)
-        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, n_epochs=1)
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, n_epochs=2)
         # get the data and start the training process
         trans.get_source_data()
-        trans.crossVal(2, params=param_tuple, log=result_write)
+        _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
+        params_acc_loss[param_tuple] = accs_los
+    np.save(os.path.join(OUTDIR, "params_acc_loss"), params_acc_loss)
 
     # print('THE BEST ACCURACY IS ' + str(bestAcc))
     # print(f"Averac: {averAcc}")
