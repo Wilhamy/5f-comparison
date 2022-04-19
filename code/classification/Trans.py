@@ -182,7 +182,7 @@ class ClassificationHead(nn.Sequential):
 
 
 class ViT(nn.Sequential):
-    def __init__(self, Nf, num_classes, num_pcs, n_time_steps:int,emb_size=10, depth=4, kc=51, num_heads=5, **kwargs):
+    def __init__(self, Nf, num_classes, num_pcs, n_time_steps:int,emb_size=10, depth=1, kc=51, num_heads=5, **kwargs):
         super().__init__(
             # channel_attention(),
             ResidualAdd(
@@ -306,11 +306,11 @@ class Trans():
 
         # self.img_shape = (self.img_height, self.img_width) # input image size
 
-        # self.Tensor = torch.cuda.FloatTensor
-        # self.LongTensor = torch.cuda.LongTensor
+        self.Tensor = torch.cuda.FloatTensor
+        self.LongTensor = torch.cuda.LongTensor
 
-        self.Tensor = torch.FloatTensor
-        self.LongTensor = torch.LongTensor
+        # self.Tensor = torch.FloatTensor
+        # self.LongTensor = torch.LongTensor
         self.criterion_l1 = torch.nn.L1Loss().to(device)
         self.criterion_l2 = torch.nn.MSELoss().to(device)
         self.criterion_cls = torch.nn.CrossEntropyLoss().to(device)
@@ -397,10 +397,10 @@ class Trans():
             # re-init model for each fold to prevent cross contamination between train and validation
             print("Fold number ", fold_num)
             print("reinit model")
-            print("###### CHECKS #####")
-            print(f"self kc:{self.kc}")
-            print(f"just kc:{kc}")
-            print("### CHECKS END ###")
+            # print("###### CHECKS #####")
+            # print(f"self kc:{self.kc}")
+            # print(f"just kc:{kc}")
+            # print("### CHECKS END ###")
             self.model = ViT(Nf = self.Nf, num_classes=self.num_classes, num_pcs=self.n_pcs, n_time_steps=self.n_time_steps, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
         
             # self.log.write(f"Fold number {fold_num}")
@@ -488,7 +488,7 @@ class Trans():
         self.test_dataloader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=self.batch_size, shuffle=True)
 
         # Optimizers
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2), weight_decay=1e-5)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2), weight_decay=1e-4)
 
         test_data = Variable(test_data.type(self.Tensor))
         test_label = Variable(test_label.type(self.LongTensor))
@@ -594,9 +594,9 @@ def main():
 
     #slicesize, heads, kc, Nf
     slicesize = [10]
-    heads = [1]
-    kc = [11]
-    Nf = [5]
+    heads = [1,2]
+    kc = [11,5,19]
+    Nf = [5,1,9]
     params = itertools.product(slicesize,heads,kc,Nf)
     num_folds = 10
     ## Print header to log
@@ -606,7 +606,7 @@ def main():
     ## Iterate over hyperparameter tuples
         print("Params:", param_tuple)
         ss, h, k_c, N_f = param_tuple 
-        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.001, n_epochs=1000)
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0001, n_epochs=1000)
         # get the data and start the training process
         trans.get_source_data()
         _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
