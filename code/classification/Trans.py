@@ -439,6 +439,7 @@ class Trans():
             all_val_loss.append(accs_losses[3]) # val_losses
            
             log.write(f'{self.filename},{fold_num},{slicesize},{heads},{kc},{Nf},{bestAcc},{averAcc}\n')
+            log.flush()
             fold_num += 1
         # avg_acc = running_total_acc / num_folds
         # accuracies and losses for one set of hyperparameters
@@ -565,8 +566,8 @@ def main():
     aver = 0
     ### EDICT FROM THE POWERS ABOVE:
     ###   THIS PROGRAM SHALL BE EXECUTED FROM THE TOPMOST DIRECTORY
-    ###   IN THE GIT REPOSITORY. ABSOLUTE PATHS ARE ABSOLUTELY FORBIDDEN.
-    ### I HAVE SPOKEN.
+    ###   IN THE GIT REPOSITORY. ABSOLUTE PATHS ARE FORBIDDEN ABSOLUTELY.
+    ### HEAR MY DECREE FOR I HAVE SPOKEN.
     ### NEGLEGENCE TO FOLLOW THESE RULES WILL RESULT IN DEATH.
 
     #PATH = ''
@@ -590,13 +591,14 @@ def main():
 
     #slicesize, heads, kc, Nf
     slicesize = [10]
-    heads = list(range(1,11))
-    kc = [9,19,29,39,49,51,59,69]
-    Nf = [3,4,5,6,7,8]
+    heads = list(range(11,5,-2))
+    kc = [9,29,51,69]
+    Nf = [3,5,8]
     params = itertools.product(slicesize,heads,kc,Nf)
     num_folds = 10
     ## Print header to log
     result_write.write('File,fold,slice,heads,kernel size,Nf,bestAcc,averAcc\n')
+    result_write.flush()
     params_acc_loss = {} # dictionary that maps hyperparams to all the training and val data associated with them {(param_ruple):accs_los}
     for param_tuple in params:
     ## Iterate over hyperparameter tuples
@@ -606,7 +608,7 @@ def main():
         trans.get_source_data()
         _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
         params_acc_loss[param_tuple] = accs_los
-    np.save(os.path.join(OUTDIR, "params_acc_loss"), params_acc_loss)
+        np.save(os.path.join(OUTDIR, "params_acc_loss"), params_acc_loss)
 
     # print('THE BEST ACCURACY IS ' + str(bestAcc))
     # print(f"Averac: {averAcc}")
