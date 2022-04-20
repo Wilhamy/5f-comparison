@@ -185,7 +185,7 @@ class ClassificationHead(nn.Sequential):
 class ViT(nn.Sequential):
     def __init__(self, Nf, num_classes, num_pcs, n_time_steps:int,emb_size=10, depth=1, kc=51, num_heads=5, **kwargs):
         super().__init__(
-            # channel_attention(),
+            # channel_attention(n_time_steps, num_classes),
             ResidualAdd(
                 nn.Sequential(
                     nn.LayerNorm(n_time_steps),
@@ -396,8 +396,8 @@ class Trans():
         y_v = self.test_labels
         _, tcounts = np.unique(y_t, return_counts=True)
         _, vcounts = np.unique(y_v, return_counts=True)
-        # print(f"y_t counts:{tcounts}")
-        # print(f"y_v counts:{vcounts}")
+        print(f"y_t counts:{tcounts}")
+        print(f"y_v counts:{vcounts}")
 
         mu, sigma, W = self.preprocessing(X_t, y_t)
         X_t = np.expand_dims((X_t - mu) / sigma, axis=1) # add channel dimension for convolution
@@ -408,7 +408,9 @@ class Trans():
         
         # train model on training set and predict accuracy on validation set #
         bestAcc, averAcc, Y_true, Y_pred, accs_losses = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
-        conf_mat = confusion_matrix(Y_true, Y_pred)
+        model_write = os.path.join(self.outdir, 'model')
+        torch.save(self.model, model_write)
+        conf_mat = confusion_matrix(Y_true.cpu(), Y_pred.cpu())
         
         # pred, acc = self.classify(X_v, y_v) # TODO: write this method # Is this necessary if testing on validation set can be done in self.train?
         bestAccs.append(bestAcc) # best accuracy in the train method
@@ -430,7 +432,10 @@ class Trans():
         accs_los["all_val_loss"] = all_test_loss
         # np.save(os.path.join(self.outdir, 'accs_los.npy'), accs_los)
         plt.matshow(conf_mat)
+        plt.colorbar()
         plt.show()
+        
+
         # return the average accs, best accs, and all the K-fold accuracies and losses (for train and val)
         return averAccs, bestAccs, accs_los
 
@@ -566,7 +571,7 @@ class Trans():
         self.test_dataloader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=self.batch_size, shuffle=True)
 
         # Optimizers
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2), weight_decay=1e-4)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2), weight_decay=2e-4)
 
         test_data = Variable(test_data.type(self.Tensor))
         test_label = Variable(test_label.type(self.LongTensor))
@@ -641,6 +646,7 @@ class Trans():
         averAcc = averAcc / num
         print('The average epoch accuracy is:', averAcc)
         print('The best epoch accuracy is:', bestAcc)
+        
         # self.log_write.write('The average epoch accuracy is: ' + str(averAcc) + "\n")
         # self.log_write.write('The best epoch accuracy is: ' + str(bestAcc) + "\n")
 
@@ -677,9 +683,9 @@ def main():
 
     #slicesize, heads, kc, Nf
     slicesize = [10]
-    heads = [1,2]
-    kc = [11,5,19]
-    Nf = [5,1,9]
+    heads = [1]
+    kc = [21]
+    Nf = [1]
     params = itertools.product(slicesize,heads,kc,Nf)
     num_folds = 10
     ## Print header to log
@@ -689,7 +695,7 @@ def main():
     ## Iterate over hyperparameter tuples
         print("Params:", param_tuple)
         ss, h, k_c, N_f = param_tuple 
-        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0001, n_epochs=1000)
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0002, n_epochs=1500)
         # get the data and start the training process
         trans.get_source_data()
         # _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
