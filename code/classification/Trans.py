@@ -11,6 +11,7 @@ import time
 import scipy.io
 from sklearn import preprocessing
 from sklearn import model_selection
+from sklearn.metrics import confusion_matrix
 
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
@@ -305,9 +306,12 @@ class Trans():
         # self.log_write = open(os.path.join(self.outdir,f"log_{filename[:-4]}.txt"), "w") # TODO: CHANGE ME
 
         # self.img_shape = (self.img_height, self.img_width) # input image size
-
-        self.Tensor = torch.cuda.FloatTensor
-        self.LongTensor = torch.cuda.LongTensor
+        if dev == "cpu":
+            self.Tensor = torch.FloatTensor
+            self.LongTensor = torch.LongTensor
+        else: 
+            self.Tensor = torch.cuda.FloatTensor
+            self.LongTensor = torch.cuda.LongTensor
 
         # self.Tensor = torch.FloatTensor
         # self.LongTensor = torch.LongTensor
@@ -367,6 +371,73 @@ class Trans():
         W = spatial_filter(X, y)
         return mu, sigma, W.T
 
+
+    # Trains on traing data, tests on testing data, no Crossval
+    def trainTest(self, num_folds:int, params, log=''):
+        print("Use train-test split.  No CrossVal")
+        slicesize, heads, kc, Nf = params
+        fold_num = 0 # number for this current fold   NOT NEEDED
+        bestAccs = []
+        averAccs = []
+        Y_trues = []
+        Y_preds = []
+        all_train_accs = []
+        all_train_loss = []
+        all_test_accs = []
+        all_test_loss = []
+        accs_los = {}
+        
+        # print("train_labels:", self.train_labels)
+
+        self.model = ViT(Nf = self.Nf, num_classes=self.num_classes, num_pcs=self.n_pcs, n_time_steps=self.n_time_steps, kc=self.kc, num_heads=self.heads).to(device) # TODO: GROUP10 include the number of classes here
+        X_t = self.train_data   # train split
+        y_t = self.train_labels # train labels
+        X_v = self.test_data     # validation split
+        y_v = self.test_labels
+        _, tcounts = np.unique(y_t, return_counts=True)
+        _, vcounts = np.unique(y_v, return_counts=True)
+        # print(f"y_t counts:{tcounts}")
+        # print(f"y_v counts:{vcounts}")
+
+        mu, sigma, W = self.preprocessing(X_t, y_t)
+        X_t = np.expand_dims((X_t - mu) / sigma, axis=1) # add channel dimension for convolution
+        X_v = np.expand_dims((X_v - mu) / sigma, axis=1)
+        X_t = np.einsum('abcd, ce -> abed', X_t, W)
+        X_v = np.einsum('abcd, ce -> abed', X_v, W) # TODO: consider einsum?
+        
+        
+        # train model on training set and predict accuracy on validation set #
+        bestAcc, averAcc, Y_true, Y_pred, accs_losses = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
+        conf_mat = confusion_matrix(Y_true, Y_pred)
+        
+        # pred, acc = self.classify(X_v, y_v) # TODO: write this method # Is this necessary if testing on validation set can be done in self.train?
+        bestAccs.append(bestAcc) # best accuracy in the train method
+        averAccs.append(averAcc) # average accuracy from the train method
+        Y_trues.append(Y_true)
+        Y_preds.append(Y_pred)
+        all_train_accs.append(accs_losses[0]) # train_accs
+        all_train_loss.append(accs_losses[1]) # train_losses
+        all_test_accs.append(accs_losses[2]) # val_accs
+        all_test_loss.append(accs_losses[3]) # val_losses
+        
+        log.write(f'{self.filename},{fold_num},{slicesize},{heads},{kc},{Nf},{bestAcc},{averAcc}\n')
+            
+        # avg_acc = running_total_acc / num_folds
+        # accuracies and losses for one set of hyperparameters
+        accs_los["all_train_accs"] = all_train_accs
+        accs_los["all_train_loss"] = all_train_loss
+        accs_los["all_val_accs"] = all_test_accs
+        accs_los["all_val_loss"] = all_test_loss
+        # np.save(os.path.join(self.outdir, 'accs_los.npy'), accs_los)
+        plt.matshow(conf_mat)
+        plt.show()
+        # return the average accs, best accs, and all the K-fold accuracies and losses (for train and val)
+        return averAccs, bestAccs, accs_los
+
+
+
+
+        pass
     '''crossVal - perform k-fold crossvalidation
     Input: num_folds (int) - the number of folds for cross validation
     Outputs:
@@ -393,7 +464,13 @@ class Trans():
         all_val_accs = []
         all_val_loss = []
         accs_los = {}
+        # t_dx, val_dx = kf.split(self.train_data)
+        print("IN CROSSVAL")
         for train_idxs, val_idxs in kf.split(self.train_data):
+            print("train_idxs:", train_idxs.shape)
+            print("val_idxs:", val_idxs.shape)
+            print("self.train_data:", self.train_data.shape)
+
             # re-init model for each fold to prevent cross contamination between train and validation
             print("Fold number ", fold_num)
             print("reinit model")
@@ -406,6 +483,7 @@ class Trans():
             # self.log.write(f"Fold number {fold_num}")
             # Generate train and validation splits #
             X_t = self.train_data[train_idxs]   # train split
+            print("X_t", X_t.shape)
             y_t = self.train_labels[train_idxs] # train labels
             X_v = self.train_data[val_idxs]     # validation split
             y_v = self.train_labels[val_idxs]   # validation labels
@@ -537,11 +615,16 @@ class Trans():
                 acc = float((y_pred == test_label).cpu().numpy().astype(int).sum()) / float(test_label.size(0))
                 train_pred = torch.max(outputs, 1)[1]
                 train_acc = float((train_pred == label).cpu().numpy().astype(int).sum()) / float(label.size(0))
+                # print('Epoch:', e,
+                #       '  Train loss:', loss.detach().cpu().numpy(),
+                #       '  Validation loss:', loss_test.detach().cpu().numpy(),
+                #       '  Train accuracy:', train_acc,
+                #       '  Validation accuracy is:', acc)
                 print('Epoch:', e,
                       '  Train loss:', loss.detach().cpu().numpy(),
-                      '  Validation loss:', loss_test.detach().cpu().numpy(),
+                      '  Test loss:', loss_test.detach().cpu().numpy(),
                       '  Train accuracy:', train_acc,
-                      '  Validation accuracy is:', acc)
+                      '  Test accuracy is:', acc)
                 # self.log_write.write(str(e) + "    " + str(acc) + "\n")
                 train_accs.append(train_acc)
                 train_loss.append(loss.detach().cpu().numpy())
@@ -609,7 +692,8 @@ def main():
         trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0001, n_epochs=1000)
         # get the data and start the training process
         trans.get_source_data()
-        _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
+        # _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
+        _,_, accs_los = trans.trainTest(num_folds=num_folds, params=param_tuple, log=result_write)
         params_acc_loss[param_tuple] = accs_los
     np.save(os.path.join(OUTDIR, "params_acc_loss"), params_acc_loss)
 
