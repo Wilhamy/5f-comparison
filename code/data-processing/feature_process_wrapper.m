@@ -2,7 +2,7 @@
 clear;
 ROOT = "D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\";
 DATADIR = ROOT + "original\";
-OUTDIR = ROOT + "raw\";
+OUTDIR = ROOT + "aug\";
 files = dir(DATADIR + "\*.mat");
 extractor = @raw_process ; % feature extractor
 
