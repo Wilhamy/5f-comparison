@@ -36,6 +36,7 @@ from spatial_filter import spatial_filter
 import matplotlib.pyplot as plt
 # from torch.utils.tensorboard import SummaryWriter
 from torch.backends import cudnn
+import seaborn as sb
 cudnn.benchmark = False
 cudnn.deterministic = True
 
@@ -407,9 +408,9 @@ class Trans():
         
         
         # train model on training set and predict accuracy on validation set #
+        self.model_write = os.path.join(self.outdir, 'model')
         bestAcc, averAcc, Y_true, Y_pred, accs_losses = self.train(X_t, y_t, X_v, y_v) # edit train method to no longer use the self.parameters
-        model_write = os.path.join(self.outdir, 'model')
-        torch.save(self.model, model_write)
+        # torch.save(self.model, model_write) # TODO REMOVE ME
         conf_mat = confusion_matrix(Y_true.cpu(), Y_pred.cpu())
         
         # pred, acc = self.classify(X_v, y_v) # TODO: write this method # Is this necessary if testing on validation set can be done in self.train?
@@ -431,8 +432,7 @@ class Trans():
         accs_los["all_val_accs"] = all_test_accs
         accs_los["all_val_loss"] = all_test_loss
         # np.save(os.path.join(self.outdir, 'accs_los.npy'), accs_los)
-        plt.matshow(conf_mat)
-        plt.colorbar()
+        sb.heatmap(conf_mat,annot=True,fmt="d")
         plt.show()
         
 
@@ -609,7 +609,7 @@ class Trans():
 
             out_epoch = time.time()
 
-            if (e + 1) % 100 == 0: # TODO: report step size
+            if (e + 1) % 10 == 0: # TODO: report step size
                 self.model.eval()
                 Tok, Cls = self.model(test_data)
 
@@ -641,6 +641,7 @@ class Trans():
                     bestAcc = acc
                     Y_true = test_label
                     Y_pred = y_pred
+                    torch.save(self.model, self.model_write)
 
         #torch.save(self.model.module.state_dict(), 'model.pth')
         averAcc = averAcc / num

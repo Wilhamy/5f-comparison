@@ -45,6 +45,7 @@ for off = offset
         train_labels(end+1,:) = d(train_loc);
     end
 end
+%%%%move data from here to below into upper loop to augment both
 onset_win_s = [0, 0.85];
 onset_win_n = onset_win_s * o.sampFreq; % number of datapoints relative to onset
 for idx = 1:length(test_locs)
@@ -54,6 +55,7 @@ for idx = 1:length(test_locs)
     test_examples(end+1, :, :) = ex;
     test_labels(end+1, :) = d(test_loc);
 end
+%%%%end move data%%%%
 % win_len = diff(onset_win_n); % length of window, in samples
 
 

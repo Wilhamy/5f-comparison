@@ -1,4 +1,5 @@
 import numpy as np
-import sklearn as sk
+from sklearn.svm import LinearSVC
 import matplotlib.pyplot as plt
 
+np.load()
