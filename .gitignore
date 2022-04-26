@@ -1,3 +1,9 @@
 raw/*
 *.mat
 *.pyc
+output/model
+output/params_acc_loss.npy
+plotting/params_acc_loss.npy
+plotting/params_acc_loss_finer.npy
+plotting/params_acc_loss_RECENT.npy
+output/sub_result.csv

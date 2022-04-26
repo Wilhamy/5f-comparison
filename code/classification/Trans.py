@@ -265,7 +265,7 @@ class channel_attention(nn.Module):
 class Trans():
     def __init__(self, path:str, filename:str, outdir:str, 
         slice_size=10, h=5, kc=51, Nf=4, pcs=4,
-        batch_size=50, n_epochs=1000, c_dim=4,
+        batch_size=50, n_epochs=1500, c_dim=4,
         lr=0.0002,b1=0.5,b2=0.9):
         '''__init__ - initialization for the Trans class
         Necessary Inputs:
