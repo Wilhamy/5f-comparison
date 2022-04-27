@@ -52,7 +52,7 @@ for idx = 1:length(locs)
 end
 
 [labels_sort, sort_idx] = sort(labels);
-examples_sort = examples(sort_idx,:,:);
+examples_sort = examples(sort_idx,:,:,:);
 
 data.id = o.id;
 data.sampFreq = o.sampFreq;
