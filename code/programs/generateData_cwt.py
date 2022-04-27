@@ -9,8 +9,8 @@ from einops import rearrange, reduce, repeat
 from torch import save
 # also need to import the transformer
 
-DATADIR = r'D:\aditya\UMich\EECS545\Project\ml-project\raw'# Path to the data
-OUTDIR = r'D:\aditya\UMich\EECS545\Project\ml-project\output'
+DATADIR = r'cwt'# Path to the data
+OUTDIR = r'output'
 
 DATAFILE = r'CWT_NoSpatial_5F-SubjectC-151204-5St-SGLHand.mat' # TODO: loop over files to run
 OUTFILE = r'cwt_out.npy'

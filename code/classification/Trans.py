@@ -62,6 +62,15 @@ n_principle_comp = 4
 # n_time_steps=170                                                                  
 #####################################################################
 
+class Print(nn.Sequential):
+    # Just print
+    def __init__(self):
+        super().__init__()
+    def forward(self,x):
+        # print(x)
+        print(x.shape)
+        return x
+
 class PatchEmbedding(nn.Module):
     def __init__(self, num_classes, num_pcs, emb_size, kc):
         # self.patch_size = patch_size
@@ -173,13 +182,18 @@ class ClassificationHead(nn.Sequential):
     def __init__(self, emb_size, n_classes):
         super().__init__()
         self.clshead = nn.Sequential(
-            Reduce('b n e -> b e', reduction='mean'), # the mysterious compression
+            # Print(), # [batch 30 emb_size]
+            Reduce('b n e -> b e', reduction='mean'), # the mysterious compression # converts from [batch_size, 30, emb_size] -> [batch_size, emb_size]
+            # Print(), # [batch emb_size]
             nn.LayerNorm(emb_size),
-            nn.Linear(emb_size, n_classes)
+            # Print(), # [batch emb_size]
+            nn.Linear(emb_size, n_classes),
+            # Print()  # [batch n_classes]
         )
 
     def forward(self, x):
         out = self.clshead(x)
+        raise NotImplementedError
         return x, out
 
 
@@ -194,9 +208,11 @@ class ViT(nn.Sequential):
                     nn.Dropout(0.2), # original 0.5
                 )
             ),
-
+            Print(), # [batch, 1, 20, 170]
             PatchEmbedding(num_classes, num_pcs, emb_size, kc),
+            Print(), # [batch, 30, 10]
             TransformerEncoder(depth, emb_size, num_heads=num_heads, Nf=Nf), # TODO: GROUP10: include heads (hyperparameter)?
+            Print(), # [batch, 30, 10]
             ClassificationHead(emb_size, num_classes)
         )
 
@@ -667,7 +683,7 @@ def main():
     DATADIR = os.path.join('.','output')#r'..\..\output'
     OUTDIR  = os.path.join('.','output')#r'..\..\output'
     FILENAME = r'saved_data.npy'
-    result_write = open(os.path.join(OUTDIR, 'sub_result.csv'), "w") # TODO: EDIT PATH
+    result_write = open(os.path.join(OUTDIR, 'temp.csv'), "w") # TODO: EDIT PATH
 
     # for i in range(9): # TODO: change for loop? are they iterating over files?
     # for file in dir(PATHTODATA\\\) # for file in data directory that we want to classify on
@@ -696,7 +712,7 @@ def main():
     ## Iterate over hyperparameter tuples
         print("Params:", param_tuple)
         ss, h, k_c, N_f = param_tuple 
-        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0002, n_epochs=1500)
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0002, n_epochs=1500, batch_size=2) # FIXME: remove batchszie
         # get the data and start the training process
         trans.get_source_data()
         # _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)

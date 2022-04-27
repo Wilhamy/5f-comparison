@@ -69,8 +69,8 @@ class PatchEmbedding(nn.Module):
             nn.Conv1d(in_channels=1, out_channels=2, kernel_size=kc, padding=1),
             nn.BatchNorm1d(2),
             nn.LeakyReLU(0.2),
-            nn.Conv1d(in_channels=2, out_channels=emb_size, kernel_size=5, stride=1), # TODO: WHAT IS THIS 16??{num_classes * num_pcs} WHO IS THIS 5???? 
-            Rearrange('b (h) (w) -> (b w) h'),
+            nn.Conv1d(in_channels=2, out_channels=emb_size, kernel_size=5, stride=1),
+            Rearrange('b (h) (w) -> b w h'), # FIXME: this is a problem. we're losing access to the batch size
         )
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_size))
         # self.positions = nn.Parameter(torch.randn((100 + 1, emb_size)))
@@ -168,14 +168,26 @@ class TransformerEncoder(nn.Sequential):
     def __init__(self, depth, emb_size, num_heads, Nf):
         super().__init__(*[TransformerEncoderBlock(emb_size, num_heads=num_heads, forward_expansion=Nf) for _ in range(depth)])
 
+class Print(nn.Sequential):
+    # Just print
+    def __init__(self):
+        super().__init__()
+    def forward(self,x):
+        # print(x)
+        print(x.shape)
+        return x
 
 class ClassificationHead(nn.Sequential):
     def __init__(self, emb_size, n_classes):
         super().__init__()
         self.clshead = nn.Sequential(
-            Reduce('n e -> e', reduction='mean'), # the mysterious compression
+            # Print(), # [340, 10]
+            # Reduce('n e -> e', reduction='mean'), # the mysterious compression
+            # Print(), # [340, 10]
             nn.LayerNorm(emb_size),
-            nn.Linear(10,n_classes)
+            # Print(), # [340, 10]
+            nn.Linear(emb_size,n_classes),
+            # Print() # [340, 5]
         )
 
     def forward(self, x):
@@ -194,9 +206,11 @@ class ViT(nn.Sequential):
             #         nn.Dropout(0.2), # original 0.5
             #     )
             # ),
-
-            PatchEmbedding(num_classes, num_pcs, emb_size, kc),
+            Print(), # [2, 1, 192]
+            PatchEmbedding(num_classes, num_pcs, emb_size, kc), # TODO: THE PROBLEM IS HERE
+            Print(), # [20, 10, 170]
             TransformerEncoder(depth, emb_size, num_heads=num_heads, Nf=Nf), # TODO: GROUP10: include heads (hyperparameter)?
+            Print(), # [340, 10]
             ClassificationHead(emb_size, num_classes)
         )
 
@@ -407,7 +421,7 @@ class Trans():
         # X_t = np.expand_dims((X_t - mu) / sigma, axis=1) # add channel dimension for convolution
         # X_v = np.expand_dims((X_v - mu) / sigma, axis=1)
         # X_t = np.einsum('abcd, ce -> abed', X_t, W)
-        # X_v = np.einsum('abcd, ce -> abed', X_v, W) # TODO: consider einsum?
+        # X_v = np.einsum('abcd, ce -> abed', X_v, W)
 
         #try pca here
         pca = PCA(n_components=192, whiten=True)
@@ -417,7 +431,7 @@ class Trans():
         X_v = rearrange(X_v, 'n d t -> n (d t)')
         print(f"X_t shape before pca {X_t.shape}")
         pca.fit(X_t)
-        # pca.fit(X_v)
+        # pca.fit(X_v) TODO: uncomment
         X_t = np.expand_dims(pca.transform(X_t), axis=1)
         X_v = np.expand_dims(pca.transform(X_v), axis=1)
         print(f"X_t shape after transforming {X_t.shape}")
@@ -712,7 +726,7 @@ def main():
     ## Iterate over hyperparameter tuples
         print("Params:", param_tuple)
         ss, h, k_c, N_f = param_tuple 
-        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0002, n_epochs=1500)
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0002, n_epochs=1500, batch_size=2) #FIXME: remove batch_size
         # get the data and start the training process
         trans.get_source_data()
         # _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
