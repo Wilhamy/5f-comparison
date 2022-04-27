@@ -2,9 +2,9 @@
 clear;
 ROOT = "D:\thewi\Documents\UM\WN22\ML\Project\Datasets\ml-project\";
 DATADIR = ROOT + "solo\";
-OUTDIR = ROOT + "aug\";
+OUTDIR = ROOT + "cwt\";
 files = dir(DATADIR + "\*.mat");
-extractor = @augmented_raw_process ; % feature extractor
+extractor = @cwt_process ; % feature extractor
 
 for idx = 1:size(files,1)
     filename = files(idx).name;
