@@ -1,0 +1,2 @@
+File,fold,slice,heads,kernel size,Nf,bestAcc,averAcc
+cwt_out.npy,0,10,1,11,9,0.2604166666666667,0.19274305555555565
