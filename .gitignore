@@ -10,3 +10,4 @@ output/sub_result.csv
 *.zip
 *.asv
 output/cwt_out.npy
+*.png
