@@ -66,7 +66,7 @@ class PatchEmbedding(nn.Module):
         # self.patch_size = patch_size
         super().__init__()
         self.projection = nn.Sequential( # TODO: We could add more conv + norm layers
-            nn.Conv1d(in_channels=1, out_channels=2, kernel_size=kc, padding=1),
+            nn.Conv1d(in_channels=1, out_channels=2, kernel_size=kc, stride=1),
             nn.BatchNorm1d(2),
             nn.LeakyReLU(0.2),
             nn.Conv1d(in_channels=2, out_channels=emb_size, kernel_size=5, stride=1),
@@ -79,7 +79,7 @@ class PatchEmbedding(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         b, _,_ = x.shape
         x = self.projection(x)
-        print(f"x shape after patch embedding projection {x.shape}")
+        # print(f"x shape after patch embedding projection {x.shape}")
         cls_tokens = repeat(self.cls_token, '() n e -> b n e', b=b)
 
         # position
@@ -99,10 +99,10 @@ class MultiHeadAttention(nn.Module):
         self.projection = nn.Linear(emb_size, emb_size)
 
     def forward(self, x: Tensor, mask: Tensor = None) -> Tensor:
-        queries = rearrange(self.queries(x), "n (h d) -> h n d", h=self.num_heads)
-        keys = rearrange(self.keys(x), "n (h d) -> h n d", h=self.num_heads)
-        values = rearrange(self.values(x), "n (h d) -> h n d", h=self.num_heads)
-        energy = torch.einsum('hqd, hkd -> hqk', queries, keys)  # batch, num_heads, query_len, key_len
+        queries = rearrange(self.queries(x), "b n (h d) ->b h n d", h=self.num_heads)
+        keys = rearrange(self.keys(x), "b n (h d) ->b h n d", h=self.num_heads)
+        values = rearrange(self.values(x), "b n (h d) ->b h n d", h=self.num_heads)
+        energy = torch.einsum('bhqd, bhkd -> bhqk', queries, keys)  # batch, num_heads, query_len, key_len
         if mask is not None:
             fill_value = torch.finfo(torch.float32).min
             energy.mask_fill(~mask, fill_value)
@@ -110,8 +110,8 @@ class MultiHeadAttention(nn.Module):
         scaling = self.emb_size ** (1 / 2)
         att = F.softmax(energy / scaling, dim=-1)
         att = self.att_drop(att)
-        out = torch.einsum('hal, hlv -> hav ', att, values)
-        out = rearrange(out, "h n d -> n (h d)")
+        out = torch.einsum('bhal, bhlv -> bhav ', att, values)
+        out = rearrange(out, "b h n d ->b n (h d)")
         out = self.projection(out)
         return out
 
@@ -181,13 +181,13 @@ class ClassificationHead(nn.Sequential):
     def __init__(self, emb_size, n_classes):
         super().__init__()
         self.clshead = nn.Sequential(
-            # Print(), # [340, 10]
-            # Reduce('n e -> e', reduction='mean'), # the mysterious compression
-            # Print(), # [340, 10]
+            
+            Reduce('b n e ->b e', reduction='mean'), # the mysterious compression
+            # Print(), # [batch_size,emb_size]
             nn.LayerNorm(emb_size),
-            # Print(), # [340, 10]
+            # Print(), # [batch_size,emb_size]
             nn.Linear(emb_size,n_classes),
-            # Print() # [340, 5]
+            # Print() # [batch_size, n_classes]
         )
 
     def forward(self, x):
@@ -206,11 +206,11 @@ class ViT(nn.Sequential):
             #         nn.Dropout(0.2), # original 0.5
             #     )
             # ),
-            Print(), # [2, 1, 192]
+            # Print(), # [2, 1, 192]
             PatchEmbedding(num_classes, num_pcs, emb_size, kc), # TODO: THE PROBLEM IS HERE
-            Print(), # [20, 10, 170]
+            # Print(), # [20, 10, 170]
             TransformerEncoder(depth, emb_size, num_heads=num_heads, Nf=Nf), # TODO: GROUP10: include heads (hyperparameter)?
-            Print(), # [340, 10]
+            # Print(), # [340, 10]
             ClassificationHead(emb_size, num_classes)
         )
 
@@ -429,12 +429,12 @@ class Trans():
         X_v = np.abs(X_v)
         X_t = rearrange(X_t, 'n d t -> n (d t)')
         X_v = rearrange(X_v, 'n d t -> n (d t)')
-        print(f"X_t shape before pca {X_t.shape}")
+        # print(f"X_t shape before pca {X_t.shape}")
         pca.fit(X_t)
-        # pca.fit(X_v) TODO: uncomment
+        # pca.fit(X_v)
         X_t = np.expand_dims(pca.transform(X_t), axis=1)
         X_v = np.expand_dims(pca.transform(X_v), axis=1)
-        print(f"X_t shape after transforming {X_t.shape}")
+        # print(f"X_t shape after transforming {X_t.shape}")
         
         # train model on training set and predict accuracy on validation set #
         self.model_write = os.path.join(self.outdir, 'model')
@@ -590,7 +590,6 @@ class Trans():
         img = torch.from_numpy(np.asarray(img).astype(np.float64))
         label = torch.from_numpy(label - 1)
 
-
         dataset = torch.utils.data.TensorDataset(img, label)
         self.dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=self.batch_size, shuffle=True)
 
@@ -715,8 +714,8 @@ def main():
     #slicesize, heads, kc, Nf
     slicesize = [10]
     heads = [1]
-    kc = [21]
-    Nf = [1]
+    kc = [11]
+    Nf = [9]
     params = itertools.product(slicesize,heads,kc,Nf)
     num_folds = 10
     ## Print header to log
@@ -726,7 +725,7 @@ def main():
     ## Iterate over hyperparameter tuples
         print("Params:", param_tuple)
         ss, h, k_c, N_f = param_tuple 
-        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.0002, n_epochs=1500, batch_size=2) #FIXME: remove batch_size
+        trans = Trans(DATADIR, FILENAME, outdir=OUTDIR, slice_size=ss, h=h, kc=k_c, Nf=N_f,lr=0.001, n_epochs=1500) #FIXME: remove batch_size
         # get the data and start the training process
         trans.get_source_data()
         # _,_, accs_los = trans.crossVal(num_folds=num_folds, params=param_tuple, log=result_write)
